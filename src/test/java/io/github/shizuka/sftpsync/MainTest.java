@@ -48,13 +48,17 @@ class MainTest {
     }
 
     @Test
-    void statusSubcommandRunsWithoutError() {
+    void statusSubcommandFailsWithoutConfig() {
+        // Sin .sync/config.json status devuelve exit 1 con un mensaje claro
+        // sugiriendo correr 'init'.
+        StringWriter err = new StringWriter();
         CommandLine cmd = new CommandLine(new Main())
             .setOut(new PrintWriter(new StringWriter()))
-            .setErr(new PrintWriter(new StringWriter()));
+            .setErr(new PrintWriter(err));
 
         int exitCode = cmd.execute("status");
 
-        assertThat(exitCode).isZero();
+        assertThat(exitCode).isEqualTo(1);
+        assertThat(err.toString()).containsIgnoringCase("init");
     }
 }

@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "sshj\\.properties"},
+      {"pattern": "META-INF/services/.*"}
+    ]
+  },
+  "bundles": []
+}

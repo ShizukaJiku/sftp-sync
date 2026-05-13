@@ -19,6 +19,8 @@
     <picocli.version>4.7.7</picocli.version>
     <jackson.version>2.21.3</jackson.version>
     <sshj.version>0.40.0</sshj.version>
+    <bouncycastle.version>1.80</bouncycastle.version>
+    <graalvm.sdk.version>24.1.2</graalvm.sdk.version>
     <slf4j.version>2.0.16</slf4j.version>
     <junit.version>5.11.4</junit.version>
     <assertj.version>3.26.3</assertj.version>
@@ -38,6 +40,27 @@
       <artifactId>sshj</artifactId>
       <version>${sshj.version}</version>
     </dependency>
+
+    <!-- BouncyCastle: provider JCE moderno. Habilita ChaCha20-Poly1305,
+         curve25519, Ed25519, etc. Requiere setup específico para native-image
+         (ver BouncyCastleFeature + buildArgs en el perfil 'native'). -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
+    </dependency>
+
+    <!-- GraalVM SDK: solo necesario para compilar BouncyCastleFeature (que
+         implementa org.graalvm.nativeimage.hosted.Feature). 'provided' = está
+         en el compile classpath pero no se empaqueta. native-image lo aporta
+         en build time, JVM normal nunca carga la Feature. -->
+    <dependency>
+      <groupId>org.graalvm.sdk</groupId>
+      <artifactId>nativeimage</artifactId>
+      <version>${graalvm.sdk.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
 
     <!-- CLI parsing -->
     <dependency>
@@ -143,6 +166,14 @@
               <buildArgs>
                 <buildArg>--no-fallback</buildArg>
                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                <!-- Registrar BouncyCastle como JCE provider en build time.
+                     Sin esto, sshj truena con NPE en initCipherFactories
+                     porque intenta KeyAgreement.getInstance("X25519", "BC")
+                     en runtime, lo cual native-image rechaza. -->
+                <buildArg>--features=io.github.shizuka.sftpsync.nativesupport.BouncyCastleFeature</buildArg>
+                <!-- BC tiene un par de classes con quirks de inicialización en native: -->
+                <buildArg>--initialize-at-build-time=org.bouncycastle.crypto.prng.SP800SecureRandom</buildArg>
+                <buildArg>--initialize-at-run-time=org.bouncycastle.jcajce.provider.drbg.DRBG$NonceAndIV,org.bouncycastle.jcajce.provider.drbg.DRBG$Default</buildArg>
               </buildArgs>
             </configuration>
           </plugin>

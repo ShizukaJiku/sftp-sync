@@ -1,0 +1,97 @@
+[
+  {
+    "name": "io.github.shizuka.sftpsync.config.SyncConfig",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.config.RemoteConfig",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.config.WatchConfig",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.manifest.Manifest",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.manifest.ManifestEntry",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.manifest.ScanCacheFile",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.manifest.ScanCacheEntry",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.sftp.LockInfo",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.watcher.WatchState",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.github.shizuka.sftpsync.watcher.WatchState$Summary",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "java.util.ArrayList",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true
+  },
+  {
+    "name": "java.util.LinkedHashMap",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true
+  },
+  {
+    "name": "java.util.HashMap",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredConstructors": true
+  }
+]
