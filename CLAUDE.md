@@ -49,15 +49,6 @@ El plan completo está en `docs/design.md` sección 13. Estado:
 - ✅ **Paso 13**: `WatchCommand` + `WatchState` + `StateStore`. Dos loops (scan local + poll remoto) sobre virtual threads. `--once` para un ciclo único. `status` lee `state.json` si está fresco (< 2× pollInterval).
 - ✅ **Paso 14**: hardening. `--gc` en push limpia `staging/` huérfanos. Re-hash pre-upload (mitigación 3.6). `PathValidation` rechaza nombres Windows-inválidos (reserved CON/PRN/..., trailing space/dot, chars prohibidos, MAX_PATH=260).
 - ⏭️ **Paso 15 (cuando publiques)**: tag `v0.1.0` → CI dispara release con binarios para los 3 OS. No requiere código.
-- Paso 7: `ThreeWayDiffer` + `ChangeSet`, `status` real
-- Paso 8: `PushCmd` v1 (staging + posix-rename + manifest atómico)
-- Paso 9: `PullCmd` v1 (download tmp + ATOMIC_MOVE + verificación hash)
-- Paso 10: heartbeat del lock + manejo de huérfanos
-- Paso 11: `IgnoreMatcher` con soporte `.gitignore` real
-- Paso 12: `ResolveCmd` para conflictos
-- Paso 13: `LocalWatcher` + `RemotePoller` + `state.json`
-- Paso 14: hardening (re-hash pre-upload, validaciones path Windows, `--gc`)
-- Paso 15: empaquetado (CI multi-OS ya está, falta release flow)
 
 ## Layout
 
@@ -79,9 +70,8 @@ src/main/java/io/github/shizuka/sftpsync/
 │                                (acquire/release/steal CAS + scheduled refresh),
 │                                RemoteTransfer (upload to staging, promote, download, delete, gcStaging)
 ├── watcher/                     WatchState (snapshot del estado), StateStore (.sync/state.json)
-├── nativesupport/               BouncyCastleFeature (registra BC en build time de native-image)
 └── util/                        Hashing (SHA-256 streaming), IgnoreMatcher (parser .gitignore),
-                                  PathExpansion, PathValidation (compatibilidad Windows)
+                                  PathExpansion, PathValidation (compatibilidad Windows), Hostname
 
 src/main/resources/META-INF/native-image/io.github.shizuka/sftp-sync/
 ├── reflect-config.json          POJOs/records que jackson-jr lee/escribe
@@ -123,43 +113,37 @@ está en `ManifestBuilder.toRelative` (`replace('\\', '/')`).
 
 ## Caveats conocidos importantes
 
-### 1. BouncyCastle en native-image
+### 1. BouncyCastle deliberadamente DESACTIVADO
 
-sshj tiene una incompatibilidad conocida con GraalVM native-image (issue
-[hierynomus/sshj#782](https://github.com/hierynomus/sshj/issues/782)): si
-activás BC con `SecurityUtils.setRegisterBouncyCastle(true)`, sshj llama
-`KeyAgreement.getInstance("X25519", "BC")` en runtime, lo cual native-image
-rechaza, y el catch de sshj NPE-a en `initCipherFactories` por hacer
-`.getCause().getMessage()` sin null-check.
+Issue [hierynomus/sshj#782](https://github.com/hierynomus/sshj/issues/782): BC
+en native-image requiere `-H:AdditionalSecurityProviders=BC` + verificación en
+build time, y en GraalVM JDK 25 + BC 1.80 la verificación falla en runtime
+con `SecurityException: Attempted to verify a provider that was not registered
+at build time: BC version 1.8`, sin importar qué flag uses.
 
-**Solución implementada**: `nativesupport/BouncyCastleFeature.java` registra BC
-en BUILD time del native-image. El perfil `native` del `pom.xml` lo activa con
-`--features=...BouncyCastleFeature` + `--initialize-at-build-time` /
-`--initialize-at-run-time` para clases específicas de BC.
+**Decisión**: `SftpSession` static block hace `setRegisterBouncyCastle(false)`.
+sshj usa providers JDK (SunJCE + SunEC), que dan AES-256-CTR/GCM, ssh-rsa,
+ssh-ed25519 y ECDH — más que suficiente para emberstack/OpenSSH. Trade-off:
+sin BC, no hay chacha20-poly1305 ni curve25519. sshj loguea ~17 warnings al
+arrancar ("Cipher [X] disabled") que son ruido visual pero el handshake
+completa sin problema. Verificado E2E con emberstack v5.1.71.
 
-**Si volvés a topar el NPE**: probablemente BC actualizó y necesita más flags
-`--initialize-at-*`. El error te dice qué clase. Documentado en el static block
-de `SftpSession`.
+**Si en el futuro necesitás BC**: requeriría wrapper de provider custom o
+esperar a un fix upstream en sshj. El binario es ~25 MB sin BC vs ~43 MB con BC.
 
-### 2. Sin BC, ningún cipher chacha20-poly1305
-
-Si por algún motivo desactivás BC, sshj loguea ~17 líneas de "Cipher [X]
-disabled" y "BouncyCastle not registered". Es ruido visual pero funcional —
-AES-256-CTR sigue disponible y el server emberstack lo negocia sin problema.
-
-### 3. Passphrase en claves SSH NO soportada
+### 2. Passphrase en claves SSH NO soportada
 
 `SftpSession.open()` solo acepta claves sin passphrase o autenticación por
 password. Si la clave tiene passphrase, falla con `UserAuthException`. Documentado
 en JavaDoc de `SftpSession`. Para v1.1 considerar integración con ssh-agent.
 
-### 4. Password se guarda plain text en `config.json`
+### 3. Password se guarda plain text en `config.json`
 
 Cuando el usuario hace `init --password`, el password queda en
 `.sync/config.json` sin cifrar. `init` imprime un warning recomendando
 `chmod 600`. Para v1.1 considerar `passwordEnv` que lea de variable de entorno.
 
-### 5. sshj rename overwrite requiere flag explícita
+### 4. sshj rename overwrite requiere flag explícita
 
 `SFTPClient.rename(src, dst)` sin flags usa `SSH_FXP_RENAME` estándar que **falla**
 con `SSH_FX_FAILURE` si `dst` existe. Para overwrite atómico hay que pasar
@@ -167,7 +151,7 @@ con `SSH_FX_FAILURE` si `dst` existe. Para overwrite atómico hay que pasar
 la extensión `posix-rename@openssh.com` y la usa (OpenSSH la trae). Patrón
 establecido en `RemoteManifestStore.save`.
 
-### 6. emberstack/sftp default mount
+### 5. emberstack/sftp default mount
 
 El usuario lo tiene corriendo en `127.0.0.1:22` con user `demo`/password `demo`,
 y la carpeta remota mapeada a `/sftp` (no `/upload` como sugieren docs viejas).

@@ -53,14 +53,17 @@ public final class SftpSession implements AutoCloseable {
     private static final int OPERATION_TIMEOUT_MS = 30_000;
 
     static {
-        // Activar BouncyCastle en sshj. En sshj 0.40.0 el flag es false por
-        // default. Con BC activo se habilitan ChaCha20-Poly1305, curve25519,
-        // soporte completo de Ed25519, etc.
+        // sshj 0.40 puede correr sin BouncyCastle usando los providers JDK
+        // (SunJCE + SunEC). Eso da AES-256-CTR/GCM, ssh-rsa, ssh-ed25519 y
+        // ECDH — más que suficiente para emberstack/OpenSSH (que negocia
+        // AES-256-CTR sin problema). Sin BC, sshj loguea ~17 warnings al
+        // arrancar ("Cipher [X] disabled") que son ruido pero no rompen nada.
         //
-        // Para que esto funcione en native-image, BouncyCastleFeature registra
-        // el provider en build time (ver perfil 'native' del pom.xml). En JVM
-        // normal, sshj resuelve la registración por su cuenta cuando ve este flag.
-        SecurityUtils.setRegisterBouncyCastle(true);
+        // Mantener BC desactivado simplifica el build native-image: no hay
+        // que verificar el provider en build time ni declarar 100 clases en
+        // --initialize-at-build-time. Ver issue hierynomus/sshj#782 para el
+        // contexto histórico.
+        SecurityUtils.setRegisterBouncyCastle(false);
     }
 
     public enum HostKeyMode {
