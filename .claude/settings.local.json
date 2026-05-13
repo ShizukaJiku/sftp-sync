@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -version)",
+      "Bash(mvn -v)",
+      "Bash(mvn -q compile)",
+      "Bash(mvn test *)",
+      "Bash(mvn -q exec:java \"-Dexec.args=--help\")",
+      "Bash(rm -rf /tmp/smoke-sftpsync)",
+      "Bash(mkdir -p /tmp/smoke-sftpsync)",
+      "Bash(mkdir -p /tmp/smoke-sftpsync/sub)",
+      "Bash(mvn -q exec:java \"-Dexec.args=init --non-interactive --host 127.0.0.1 --user demo --password demo --remote-root /sftp -C /tmp/smoke-sftpsync\")",
+      "Read(//tmp/smoke-sftpsync/.sync/**)",
+      "Bash(mvn -q exec:java \"-Dexec.args=scan --save -C /tmp/smoke-sftpsync\")"
+    ]
+  }
+}
