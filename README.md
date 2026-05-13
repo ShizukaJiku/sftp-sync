@@ -52,6 +52,21 @@ mvn -Pnative package
 Requiere GraalVM JDK 25 instalado (recomendado vía
 [SDKMAN](https://sdkman.io/): `sdk install java 25-graalce`).
 
+## Binarios precompilados
+
+Cada push a `main` (y cada tag `vX.Y.Z`) dispara el CI, que produce binarios
+nativos para los tres OS. Para descargarlos:
+
+1. Andá a la pestaña **Actions** del repo.
+2. Abrí el último run del workflow `CI`.
+3. Bajá la sección **Artifacts** y descargá:
+   - `sftp-sync-linux-x64`
+   - `sftp-sync-windows-x64`
+   - `sftp-sync-macos-arm64`
+
+En tags `vX.Y.Z` además se publica un GitHub Release con los tres binarios
+adjuntos.
+
 ## Servidor SFTP
 
 Probado contra [emberstack/sftp](https://hub.docker.com/r/emberstack/sftp) v5.1.71
