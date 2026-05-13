@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test (JVM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM JDK 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+          cache: 'maven'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify JDK
+        run: java --version
+
+      - name: Compile
+        run: mvn -B -ntp compile
+
+      - name: Test
+        run: mvn -B -ntp test
+
+      - name: Verify --help works
+        run: mvn -B -ntp -q exec:java -Dexec.args="--help"
