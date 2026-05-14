@@ -127,7 +127,16 @@ public final class RemoteManifestStore {
         }
     }
 
-    static void mkdirs(SftpClient sftp, String path) throws IOException {
+    /**
+     * Crea {@code path} y todos sus directorios padre en el remoto que no
+     * existan, recursivamente. Idempotente: si {@code path} ya existe retorna
+     * sin tocarlo. Es la primitiva usada por {@code uploadToStaging} y por el
+     * bootstrap de {@code init --bootstrap-remote}.
+     *
+     * <p>Si algún segmento padre no se puede crear por permisos, propaga la
+     * {@link SftpException} sin tocar lo que ya existe.
+     */
+    public static void mkdirs(SftpClient sftp, String path) throws IOException {
         if (path.isEmpty() || "/".equals(path)) return;
         if (statExists(sftp, path)) return;
         int slash = path.lastIndexOf('/');
