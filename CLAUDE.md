@@ -153,9 +153,21 @@ El binario producido por el perfil `native` aplica:
 - `--no-fallback`: build falla si necesita modo fallback en lugar de hacerlo
   silenciosamente.
 
-Post-build, el CI aplica **UPX con `--best --lzma`** que comprime el binario
-~75% (27 MB → ~7 MB en Linux, similar en Windows). El startup overhead de la
-descompresión es ~50 ms, imperceptible para un CLI.
+Post-build, el CI aplica **UPX `--best --lzma` solo en Linux** que comprime
+el ELF de 27 MB → ~7 MB. En Windows, UPX rompe los binarios PE32+ generados
+por GraalVM Native Image (incompatibilidad de secciones SubstrateVM — probado
+con UPX 4.2 y 5.1, distintos flags). Aceptamos el .exe en ~27 MB. La asimetría
+de tamaño Linux/Windows queda documentada.
+
+### Investigación sobre clientes SSH alternativos
+
+Intenté migrar a Apache MINA SSHD para resolver el tema BC (issue sshj#871).
+Resultado: MINA tiene problemas distintos pero igualmente bloqueantes en
+GraalVM native — múltiples clases internas tocan `SecureRandom` durante el
+`<clinit>`, y al inicializarlas en build-time GraalVM detecta seeds congeladas
+en el image heap; mantenerlas en run-time arrastra conflictos con `org.slf4j`
+y `org.bouncycastle`. Conclusión: **sshj 0.40 sin BC sigue siendo el path más
+estable** hasta que algún cliente SSH madure su soporte de native-image.
 
 ### 2. Passphrase en claves SSH NO soportada
 

@@ -90,32 +90,24 @@ jobs:
         shell: bash
         run: ./target/${{ matrix.binary }} --help
 
-      # ─── Compresión UPX para reducir tamaño del binario ~75% ───
-      - name: Install UPX (Linux)
+      # UPX solo en Linux. Comprime el ELF de 27 MB a ~7 MB (--best --lzma).
+      # En Windows, UPX NO funciona con PE32+ generados por GraalVM Native Image:
+      # la compresión termina sin error pero el .exe resultante falla al cargar
+      # con exit 193 (ERROR_BAD_EXE_FORMAT). Probado en UPX 4.2.4 y 5.1.1, con
+      # --best, -1, -7, --overlay=copy, --strip-relocs=0 — sin éxito. Es una
+      # incompatibilidad estructural entre las secciones que SubstrateVM agrega
+      # al PE y el formato que UPX espera al descomprimir en runtime.
+      # Aceptamos el binario Windows en su tamaño nativo (~27 MB).
+      - name: Compress Linux binary with UPX
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y upx-ucl
-
-      - name: Install UPX (Windows)
-        if: runner.os == 'Windows'
-        run: choco install upx -y --no-progress
-
-      # UPX --lzma rompe PE32+ binaries en Windows en versiones recientes (corrupt
-      # output que falla al cargar con exit 193). En Linux funciona bien. Por eso
-      # usamos --lzma solo en Linux y --best (sin LZMA) en Windows. Si igual el
-      # binario comprimido no corre, restauramos el original (best-effort).
-      - name: Compress with UPX
-        shell: bash
         run: |
+          sudo apt-get install -y upx-ucl
           BIN=target/${{ matrix.binary }}
-          ls -lh "$BIN"
           cp "$BIN" "$BIN.orig"
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            upx --best --lzma "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
+          if upx --best --lzma "$BIN" && ./"$BIN" --help >/dev/null 2>&1; then
+            echo "UPX compression succeeded"
           else
-            upx --best "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
-          fi
-          if ! "$BIN" --help >/dev/null 2>&1; then
-            echo "Compressed binary broken, restoring original"
+            echo "UPX broke the binary, restoring original"
             cp "$BIN.orig" "$BIN"
           fi
           rm -f "$BIN.orig"
