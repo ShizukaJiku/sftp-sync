@@ -135,10 +135,15 @@ public final class SftpSession implements AutoCloseable {
     @Override
     public void close() throws IOException {
         IOException first = null;
-        try { if (sftp != null) sftp.close(); } catch (IOException e) { first = e; }
-        try { if (session != null) session.close(); } catch (IOException e) { if (first == null) first = e; }
+        try { if (sftp != null) sftp.close(); }
+        catch (IOException e) { first = e; }
+        try { if (session != null) session.close(); }
+        catch (IOException e) { if (first == null) first = e; else first.addSuppressed(e); }
         try { if (client != null) client.stop(); }
-        catch (Exception e) { if (first == null) first = new IOException(e); }
+        catch (Exception e) {
+            IOException wrapped = e instanceof IOException io ? io : new IOException(e);
+            if (first == null) first = wrapped; else first.addSuppressed(wrapped);
+        }
         if (first != null) throw first;
     }
 

@@ -82,6 +82,14 @@ public final class RemoteLockManager {
             }
             return lock;
         } catch (SftpException e) {
+            // Solo tratamos como "lock ya tomado" si el server reporta el clash
+            // específico de CREAT|EXCL: SSH_FX_FILE_ALREADY_EXISTS (11, SFTPv4+) o
+            // SSH_FX_FAILURE (4, lo que OpenSSH reporta en SFTPv3). Otros códigos
+            // (permisos, espacio, etc.) son errores reales que hay que propagar.
+            int s = e.getStatus();
+            if (s != 4 /* FAILURE */ && s != 11 /* FILE_ALREADY_EXISTS */) {
+                throw e;
+            }
             LockInfo existing = tryRead(sftp, remoteRoot);
             if (existing != null) {
                 throw new LockHeldException(existing, e);
@@ -133,7 +141,9 @@ public final class RemoteLockManager {
         } catch (IOException e) {
             try {
                 if (RemoteManifestStore.statExists(sftp, tmp)) sftp.remove(tmp);
-            } catch (IOException _) {}
+            } catch (IOException ex) {
+                LOG.debug("No pude limpiar tmp '{}' tras error: {}", tmp, ex.getMessage());
+            }
             throw e;
         }
     }
@@ -156,15 +166,17 @@ public final class RemoteLockManager {
     private static LockInfo steal(SftpClient sftp, String remoteRoot,
                                   String newHolder, String operation,
                                   int ttlSeconds, LockInfo prevHolder) throws IOException {
-        String tmp = lockNewPath(remoteRoot) + "." + safeForFilename(newHolder);
+        // Tmp único por intento. holder = hostname+pid+clientIdShort NO garantiza
+        // unicidad: dos containers/namespaces pueden compartir hostname+pid.
+        // Agregamos un nonce para que dos stealers nunca compartan tmp path.
+        String nonce = Long.toHexString(System.nanoTime());
+        String tmp = lockNewPath(remoteRoot) + "." + safeForFilename(newHolder) + "." + nonce;
         String target = lockPath(remoteRoot);
         LockInfo candidate = LockInfo.now(newHolder, operation, ttlSeconds);
         byte[] bytes = (JSON_PRETTY.asString(candidate) + "\n").getBytes(StandardCharsets.UTF_8);
 
-        try {
-            if (RemoteManifestStore.statExists(sftp, tmp)) sftp.remove(tmp);
-        } catch (IOException _) {}
-
+        // Sin pre-clean: el nonce garantiza que el tmp es nuevo. Si EXCL falla,
+        // es un bug raro (race con nosotros mismos) que merece propagar.
         try (SftpClient.CloseableHandle h = sftp.open(tmp,
                 EnumSet.of(OpenMode.Create, OpenMode.Exclusive, OpenMode.Write))) {
             sftp.write(h, 0, bytes, 0, bytes.length);
@@ -173,7 +185,8 @@ public final class RemoteLockManager {
         try {
             PosixRename.overwrite(sftp, tmp, target);
         } catch (IOException e) {
-            try { sftp.remove(tmp); } catch (IOException _) {}
+            try { sftp.remove(tmp); }
+            catch (IOException ex) { LOG.debug("No pude limpiar tmp '{}': {}", tmp, ex.getMessage()); }
             throw e;
         }
 

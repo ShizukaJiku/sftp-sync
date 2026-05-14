@@ -6,6 +6,8 @@ import io.github.shizuka.sftpsync.manifest.Manifest;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClient.OpenMode;
 import org.apache.sshd.sftp.common.SftpException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +20,8 @@ import java.util.Objects;
  * Lectura y escritura del manifest remoto vía SFTP. Stateless.
  */
 public final class RemoteManifestStore {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RemoteManifestStore.class);
 
     public static final String DIR_NAME = SyncConfigStore.DIR_NAME;
     public static final String FILE_NAME = "manifest.json";
@@ -99,7 +103,9 @@ public final class RemoteManifestStore {
         } catch (IOException e) {
             try {
                 if (statExists(sftp, tmp)) sftp.remove(tmp);
-            } catch (IOException _) {}
+            } catch (IOException ex) {
+                LOG.debug("No pude limpiar tmp '{}' tras error: {}", tmp, ex.getMessage());
+            }
             throw e;
         }
     }

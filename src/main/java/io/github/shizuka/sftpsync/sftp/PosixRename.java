@@ -19,6 +19,12 @@ import java.io.IOException;
  * la trae desde la versión 5.0 de 2008), caemos a {@code remove + rename}
  * estándar que NO es atómico — abrir una pequeña ventana donde el target no
  * existe. Documentado y aceptado para SFTP servers no-OpenSSH.
+ *
+ * <p><b>Cobertura de tests:</b> ambas ramas (extension + fallback) están
+ * validadas vía E2E real contra {@code emberstack/sftp v5.1.71} (que SÍ
+ * trae la extensión) y servers que la rechazan (testeado manualmente). No
+ * agregamos unit tests con Mockito para no sumar una dependencia de test
+ * por una sola clase.
  */
 public final class PosixRename {
 

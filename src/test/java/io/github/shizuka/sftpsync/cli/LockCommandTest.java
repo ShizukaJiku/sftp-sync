@@ -61,7 +61,9 @@ class LockCommandTest {
         int exit = newCli(new StringWriter(), err)
             .execute("-C", tmp.toString(), "lock", "--insecure");
 
-        assertThat(exit).isNotZero();
+        // MINA SSHD: connection-refused → SshException → EXIT_TRANSPORT (3).
+        assertThat(exit).isEqualTo(3);
+        assertThat(err.toString()).containsIgnoringCase("Error SSH");
     }
 
     @Test

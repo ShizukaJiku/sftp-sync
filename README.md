@@ -54,7 +54,12 @@ Requiere GraalVM JDK 25 instalado (recomendado vía
 
 ## Instalación
 
-Binarios nativos para Linux y Windows. Comprimidos con UPX (~7 MB cada uno).
+Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~45 MB.
+
+> **Requisito de CPU**: el binario está compilado con `-march=x86-64-v3`. Requiere
+> **CPU Intel Haswell (2013+) o AMD Excavator (2015+)**. Cualquier desktop/laptop
+> de los últimos 10 años cumple. CPUs Atom muy antiguas o AMD pre-2015 no pueden
+> ejecutarlo (fallan con SIGILL).
 
 ### Desde GitHub Releases (recomendado)
 
