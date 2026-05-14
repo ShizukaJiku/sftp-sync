@@ -9,13 +9,15 @@ three-way diff con detección de conflictos manuales, y un proceso `watch` que
 
 ## Estado
 
-Pre-MVP. Esqueleto del CLI funcional (todos los comandos imprimen `not yet implemented`).
-Plan de implementación y diseño técnico completo en [`docs/design.md`](docs/design.md).
+v0.1 — sync engine completo. Push, pull, watch, resolve y manejo de conflictos
+funcionales contra OpenSSH y emberstack/sftp. Plan de implementación y diseño
+técnico en [`docs/design.md`](docs/design.md).
 
 ## Stack
 
-- **GraalVM JDK 25** + Maven 3.9
-- [sshj](https://github.com/hierynomus/sshj) 0.40.0 — SFTP cliente
+- **GraalVM JDK 25** community + Maven 3.9
+- [Apache MINA SSHD](https://github.com/apache/mina-sshd) 2.16 — cliente SFTP
+- [BouncyCastle](https://www.bouncycastle.org/) 1.80 — JCE provider para curve25519 / Ed25519
 - [picocli](https://picocli.info/) 4.7.7 — CLI parsing
 - [jackson-jr](https://github.com/FasterXML/jackson-jr) 2.21.3 — JSON (GraalVM-friendly)
 - slf4j-simple 2.0 — logging mínimo
@@ -32,29 +34,21 @@ sftp-sync watch    Vigilar local y remoto, mantener el status fresco. No sincron
 sftp-sync resolve  Resolver un conflicto post-pull eligiendo qué versión queda
 ```
 
-## Build
+Opciones notables:
 
-Durante desarrollo, usar la JVM (build rápido):
-
-```sh
-mvn compile
-mvn exec:java -Dexec.args="--help"
-mvn test
-```
-
-Para producir el binario nativo (más lento, ~30s–2min):
-
-```sh
-mvn -Pnative package
-./target/sftp-sync --help
-```
-
-Requiere GraalVM JDK 25 instalado (recomendado vía
-[SDKMAN](https://sdkman.io/): `sdk install java 25-graalce`).
+- `init --remote-parent /sftp` toma el nombre de la carpeta actual y arma el
+  `remoteRoot` automáticamente (ej. cwd `proj-x/` + parent `/sftp` →
+  `remoteRoot=/sftp/proj-x`). Mutex con `--remote-root` clásico.
+- `pull --workers N` (default `8`, max `32`) descarga archivos en paralelo. Cada
+  worker usa su propia sesión SFTP; el speedup más grande aparece con muchos
+  archivos chicos.
+- Compresión SSH (`zlib@openssh.com`/`zlib`) se negocia automáticamente con el
+  server. Para workloads YAML/código/JSON puede reducir bytes en el wire 3-5×.
+  Si el server no la soporta, degrada limpio a `none`.
 
 ## Instalación
 
-Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~45 MB.
+Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~67 MB.
 
 > **Requisito de CPU**: el binario está compilado con `-march=x86-64-v3`. Requiere
 > **CPU Intel Haswell (2013+) o AMD Excavator (2015+)**. Cualquier desktop/laptop
@@ -112,11 +106,43 @@ usá los métodos de arriba.
 
 Para producir el binario localmente, ver la sección **Build** más abajo.
 
+## Build
+
+Durante desarrollo, usar la JVM (build rápido):
+
+```sh
+mvn compile
+mvn exec:java -Dexec.args="--help"
+mvn test
+```
+
+Para producir el binario nativo (~1-3 min, segunda corrida es más rápida por cache):
+
+```sh
+mvn -Pnative -DskipTests package
+./target/sftp-sync --help
+```
+
+### Requisitos
+
+- **GraalVM JDK 25 community** o **Oracle GraalVM JDK 25**. Vía
+  [SDKMAN](https://sdkman.io/): `sdk install java 25-graalce`. En Windows, bajar
+  el zip de [oracle.com/graalvm](https://www.oracle.com/java/technologies/downloads/#graalvm)
+  o usar [scoop](https://scoop.sh/): `scoop install graalvm-jdk-25-lts`.
+- **Linux**: `gcc` y `zlib1g-dev` (en Debian/Ubuntu: `apt install build-essential zlib1g-dev`).
+- **Windows**: Visual Studio Build Tools 2022+ con el workload **"Desktop development with C++"**
+  (incluye MSVC y Windows SDK). Si tenés VS Community / Professional, instalá el mismo workload
+  desde el VS Installer. GraalVM Native Image llama al `link.exe` de MSVC para producir el `.exe`.
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`).
+
+El `JAVA_HOME` debe apuntar a la instalación de GraalVM, y `native-image`
+debe estar en el `PATH` (típicamente en `$JAVA_HOME/bin`).
+
 ## Servidor SFTP
 
 Probado contra [emberstack/sftp](https://hub.docker.com/r/emberstack/sftp) v5.1.71
-en Docker. Cualquier servidor OpenSSH funciona porque dependemos de la
-extensión estándar `posix-rename@openssh.com`.
+en Docker y OpenSSH stock. Requisito: el server debe anunciar la extensión
+estándar `posix-rename@openssh.com` (todos los OpenSSH modernos la soportan).
 
 ## Licencia
 
