@@ -9,8 +9,6 @@ import io.github.shizuka.sftpsync.sftp.LockInfo;
 import io.github.shizuka.sftpsync.sftp.RemoteLockManager;
 import io.github.shizuka.sftpsync.sftp.SftpSession;
 import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
-import net.schmizz.sshj.transport.TransportException;
-import net.schmizz.sshj.userauth.UserAuthException;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -115,16 +113,8 @@ public final class LockCommand implements Callable<Integer> {
                 return doRelease(session, remoteRoot, out);
             }
             return doRead(session, remoteRoot, out);
-
-        } catch (UserAuthException e) {
-            err.println("Autenticación falló: " + e.getMessage());
-            return 2;
-        } catch (TransportException e) {
-            err.println("Error SSH: " + e.getMessage());
-            return 3;
         } catch (IOException e) {
-            err.println("Error de conexión: " + e.getMessage());
-            return 5;
+            return SftpErrors.mapToExitCode(e, err);
         }
     }
 

@@ -23,7 +23,7 @@ Probado contra `emberstack/sftp` v5.1.71 en Docker.
 |-----------|---------|---------|
 | **GraalVM JDK 21** community | LTS hasta 2031 | Mejor compatibilidad con sshj/BC en native-image que JDK 25 |
 | **Maven 3.9** | — | El user prefiere XML explícito sobre Gradle |
-| **sshj** | 0.40.0 | posix-rename support, mantenido |
+| **Apache MINA SSHD** | 2.16.0 | Reemplazó a sshj 0.40 (issue #871: incompatible con BC en native-image) |
 | **picocli** | 4.7.7 | + picocli-codegen para reflection en native |
 | **jackson-jr-objects** | 2.21.3 | GraalVM-friendly, sin reflection mágica de databind |
 | **slf4j-simple** | 2.0.16 | Logging mínimo, zero-config en native |
@@ -113,35 +113,59 @@ está en `ManifestBuilder.toRelative` (`replace('\\', '/')`).
 
 ## Caveats conocidos importantes
 
-### 1. BouncyCastle deliberadamente DESACTIVADO
+### 1. Por qué Apache MINA SSHD en vez de sshj
 
-Issue [hierynomus/sshj#871](https://github.com/hierynomus/sshj/issues/871): sshj
-0.40 internamente crea una nueva instancia de `BouncyCastleProvider` con
-`Class.forName().newInstance()` en `SecurityUtils.registerSecurityProvider`,
-y JCE en native-image rechaza esa instancia recién creada porque NO fue verificada
-en build time. El error es:
+Migramos de sshj 0.40 a Apache MINA SSHD 2.16.0 porque sshj tenía
+[#871](https://github.com/hierynomus/sshj/issues/871): crea una nueva instancia
+de `BouncyCastleProvider` con `Class.forName().newInstance()` en runtime, y
+JCE en native-image rechaza esa instancia recién creada. **MINA usa el provider
+pre-registrado vía `SecurityUtils.isBouncyCastleRegistered()` — sin re-crear
+la instancia, así que funciona.**
 
+### 2. Patrón BouncyCastle + native-image (validado con MINA SSHD)
+
+Receta validada (basada en `chirontt/jgit.pgm.native`):
+
+1. **`BouncyCastleInitializer`** — clase normal con static block que llama
+   `Security.addProvider(new BouncyCastleProvider())`.
+
+2. **`--initialize-at-build-time`** para `org.bouncycastle`, `org.apache.sshd`,
+   `org.slf4j` y la clase del initializer. Inicializa todo en build time;
+   el provider queda snapshot-eado en el image heap.
+
+3. **`-H:ClassInitialization=...:rerun`** para las clases con `SecureRandom`
+   o DRBG en su `<clinit>`. El modo `rerun` significa "ya inicializado en
+   build-time, pero RE-inicializar también en run-time" — resuelve el conflicto
+   de seeds congeladas:
+   - `org.apache.sshd.common.random.JceRandom`
+   - `org.apache.sshd.common.random.JceRandom$Cache`
+   - `org.bouncycastle.crypto.CryptoServicesRegistrar`
+   - `org.bouncycastle.jcajce.provider.drbg.DRBG`, `$Default`, `$NonceAndIV`
+
+4. **`proxy-config.json`** — MINA usa `Proxy.newProxyInstance` para event
+   listeners. Hay que registrar las interfaces de proxy (SessionListener,
+   ChannelListener, etc.) en `META-INF/native-image/.../proxy-config.json`.
+
+5. **`reflect-config.json`** — agregar overloads de `getInstance(String, String)`
+   para JCE classes (`KeyFactory`, `KeyAgreement`, `Cipher`, `Mac`, `Signature`,
+   `KeyPairGenerator`, `MessageDigest`) ya que MINA los busca via reflection.
+
+### 3. posix-rename via extensión OpenSSH (no CopyMode flag)
+
+MINA SSHD rechaza `SftpClient.rename(src, dst, CopyMode.Overwrite)` cuando
+el server habla SFTPv3 (lo que OpenSSH negocia por default). Los rename flags
+solo están definidos en SFTPv5+. Para sobrescribir atómicamente en SFTPv3,
+hay que invocar la extensión OpenSSH explícitamente:
+
+```java
+OpenSSHPosixRenameExtension ext = sftp.getExtension(OpenSSHPosixRenameExtension.class);
+if (ext != null && ext.isSupported()) {
+    ext.posixRename(src, dst);
+}
 ```
-UnsupportedFeatureError: Trying to verify a provider that was not registered
-at build time: BC version 1.8. All providers must be registered and verified
-in the Native Image builder.
-```
 
-Probado exhaustivamente en GraalVM CE 21.0.2 y 25.0.0 con todos los flags
-posibles (`--initialize-at-build-time=org.bouncycastle`,
-`-H:AdditionalSecurityProviders`, `--enable-all-security-services`,
-`BouncyCastleInitializer` con verificación en `<clinit>`). El problema no
-es de JDK, es que sshj insiste en re-crear su propio provider.
-
-**Decisión**: `SftpSession.<clinit>` hace `setRegisterBouncyCastle(false)`.
-sshj usa providers JDK (SunJCE + SunEC), que dan AES-256-CTR/GCM, ssh-rsa,
-ssh-ed25519 y ECDH — más que suficiente para emberstack/OpenSSH. Trade-off:
-sin BC, no hay chacha20-poly1305 ni curve25519. sshj loguea ~17 warnings al
-arrancar ("Cipher [X] disabled") que son cosméticos. Verificado E2E con
-emberstack v5.1.71.
-
-**Cuando sshj#871 mergee**: se puede volver a habilitar BC. El binario pasa
-de ~27 MB sin BC a ~43 MB con BC, así que el trade-off de size también pesa.
+Patrón encapsulado en `sftp/PosixRename.overwrite(sftp, src, dst)` con
+fallback no-atómico (`remove + rename`) para servers que no anuncian la extensión.
 
 ### Optimizaciones de binario nativo
 
@@ -154,42 +178,24 @@ El binario producido por el perfil `native` aplica:
   silenciosamente.
 
 Post-build, el CI aplica **UPX `--best --lzma` solo en Linux** que comprime
-el ELF de 27 MB → ~7 MB. En Windows, UPX rompe los binarios PE32+ generados
-por GraalVM Native Image (incompatibilidad de secciones SubstrateVM — probado
-con UPX 4.2 y 5.1, distintos flags). Aceptamos el .exe en ~27 MB. La asimetría
-de tamaño Linux/Windows queda documentada.
+el ELF (46 MB → ~11 MB con MINA+BC). En Windows, UPX rompe los binarios PE32+
+generados por GraalVM Native Image (incompatibilidad de secciones SubstrateVM
+— probado con UPX 4.2 y 5.1, distintos flags). Aceptamos el .exe en su tamaño
+nativo. La asimetría de tamaño Linux/Windows queda documentada.
 
-### Investigación sobre clientes SSH alternativos
-
-Intenté migrar a Apache MINA SSHD para resolver el tema BC (issue sshj#871).
-Resultado: MINA tiene problemas distintos pero igualmente bloqueantes en
-GraalVM native — múltiples clases internas tocan `SecureRandom` durante el
-`<clinit>`, y al inicializarlas en build-time GraalVM detecta seeds congeladas
-en el image heap; mantenerlas en run-time arrastra conflictos con `org.slf4j`
-y `org.bouncycastle`. Conclusión: **sshj 0.40 sin BC sigue siendo el path más
-estable** hasta que algún cliente SSH madure su soporte de native-image.
-
-### 2. Passphrase en claves SSH NO soportada
+### 4. Passphrase en claves SSH NO soportada
 
 `SftpSession.open()` solo acepta claves sin passphrase o autenticación por
 password. Si la clave tiene passphrase, falla con `UserAuthException`. Documentado
 en JavaDoc de `SftpSession`. Para v1.1 considerar integración con ssh-agent.
 
-### 3. Password se guarda plain text en `config.json`
+### 5. Password se guarda plain text en `config.json`
 
 Cuando el usuario hace `init --password`, el password queda en
 `.sync/config.json` sin cifrar. `init` imprime un warning recomendando
 `chmod 600`. Para v1.1 considerar `passwordEnv` que lea de variable de entorno.
 
-### 4. sshj rename overwrite requiere flag explícita
-
-`SFTPClient.rename(src, dst)` sin flags usa `SSH_FXP_RENAME` estándar que **falla**
-con `SSH_FX_FAILURE` si `dst` existe. Para overwrite atómico hay que pasar
-`EnumSet.of(RenameFlags.OVERWRITE)`: sshj entonces detecta si el server soporta
-la extensión `posix-rename@openssh.com` y la usa (OpenSSH la trae). Patrón
-establecido en `RemoteManifestStore.save`.
-
-### 5. emberstack/sftp default mount
+### 6. emberstack/sftp default mount
 
 El usuario lo tiene corriendo en `127.0.0.1:22` con user `demo`/password `demo`,
 y la carpeta remota mapeada a `/sftp` (no `/upload` como sugieren docs viejas).

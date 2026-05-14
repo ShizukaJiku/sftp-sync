@@ -20,8 +20,6 @@ import io.github.shizuka.sftpsync.sftp.RemoteTransfer;
 import io.github.shizuka.sftpsync.sftp.SftpSession;
 import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
 import io.github.shizuka.sftpsync.util.Hashing;
-import net.schmizz.sshj.transport.TransportException;
-import net.schmizz.sshj.userauth.UserAuthException;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -245,16 +243,8 @@ public final class PushCommand implements Callable<Integer> {
             out.println();
             out.println("Push OK.");
             return 0;
-
-        } catch (UserAuthException e) {
-            err.println("Autenticación falló: " + e.getMessage());
-            return 2;
-        } catch (TransportException e) {
-            err.println("Error SSH: " + e.getMessage());
-            return 3;
         } catch (IOException e) {
-            err.println("Error durante push: " + e.getMessage());
-            return 5;
+            return SftpErrors.mapToExitCode(e, err);
         }
     }
 

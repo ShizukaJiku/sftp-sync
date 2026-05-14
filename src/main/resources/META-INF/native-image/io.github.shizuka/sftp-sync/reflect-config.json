@@ -93,5 +93,55 @@
     "name": "java.util.HashMap",
     "allDeclaredConstructors": true,
     "queryAllDeclaredConstructors": true
+  },
+  {
+    "name": "java.security.KeyFactory",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.security.Provider"] }
+    ]
+  },
+  {
+    "name": "java.security.MessageDigest",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
+  },
+  {
+    "name": "javax.crypto.KeyAgreement",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
+  },
+  {
+    "name": "javax.crypto.Cipher",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
+  },
+  {
+    "name": "javax.crypto.Mac",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
+  },
+  {
+    "name": "java.security.Signature",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
+  },
+  {
+    "name": "java.security.KeyPairGenerator",
+    "methods": [
+      { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+      { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+    ]
   }
 ]
