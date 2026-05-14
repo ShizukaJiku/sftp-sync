@@ -124,6 +124,27 @@
     },
 
     {
+      "type": "org.apache.sshd.common.io.nio2.Nio2ServiceFactoryFactory",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "org.apache.sshd.common.io.nio2.Nio2ServiceFactory",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "org.apache.sshd.common.io.nio2.Nio2Acceptor",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "org.apache.sshd.common.io.nio2.Nio2Connector",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "org.apache.sshd.common.io.nio2.Nio2Session",
+      "allDeclaredConstructors": true
+    },
+
+    {
       "type": { "proxy": ["org.apache.sshd.common.session.SessionListener"] }
     },
     {
