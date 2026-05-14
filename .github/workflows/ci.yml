@@ -99,14 +99,29 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install upx -y --no-progress
 
+      # UPX --lzma rompe PE32+ binaries en Windows en versiones recientes (corrupt
+      # output que falla al cargar con exit 193). En Linux funciona bien. Por eso
+      # usamos --lzma solo en Linux y --best (sin LZMA) en Windows. Si igual el
+      # binario comprimido no corre, restauramos el original (best-effort).
       - name: Compress with UPX
         shell: bash
         run: |
-          ls -lh target/${{ matrix.binary }}
-          upx --best --lzma target/${{ matrix.binary }}
-          ls -lh target/${{ matrix.binary }}
+          BIN=target/${{ matrix.binary }}
+          ls -lh "$BIN"
+          cp "$BIN" "$BIN.orig"
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            upx --best --lzma "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
+          else
+            upx --best "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
+          fi
+          if ! "$BIN" --help >/dev/null 2>&1; then
+            echo "Compressed binary broken, restoring original"
+            cp "$BIN.orig" "$BIN"
+          fi
+          rm -f "$BIN.orig"
+          ls -lh "$BIN"
 
-      - name: Verify compressed binary still works
+      - name: Verify final binary works
         shell: bash
         run: ./target/${{ matrix.binary }} --help
 
