@@ -121,7 +121,12 @@ jobs:
           if [[ "${{ runner.os }}" == "Linux" ]]; then
             upx --best --lzma "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
           else
-            upx -1 "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
+            # --overlay=copy preserva las secciones GraalVM al final del PE que
+            # contienen el isolate y demás runtime data. Sin esto el .exe falla
+            # con exit 193 al cargarse. --strip-relocs=0 deshabilita el strip
+            # de relocations (también puede causar el crash).
+            upx -7 --overlay=copy --strip-relocs=0 "$BIN" \
+              || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
           fi
           if ! "$BIN" --help >/dev/null 2>&1; then
             echo "Compressed binary broken, restoring original"
