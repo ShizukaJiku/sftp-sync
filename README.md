@@ -74,7 +74,7 @@ Ejemplo de `.syncignore` para des-ignorar un jar:
 
 ## Instalación
 
-Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~51 MB.
+Binarios nativos para Linux y Windows. Linux ~8 MB (UPX), Windows ~33 MB.
 
 > **Requisito de CPU**: el binario está compilado con `-march=x86-64-v3`. Requiere
 > **CPU Intel Haswell (2013+) o AMD Excavator (2015+)**. Cualquier desktop/laptop
@@ -123,10 +123,15 @@ Si querés un build de una rama específica (no una release tageada), bajá desd
 - `sftp-sync-linux-x64`
 - `sftp-sync-windows-x64`
 
-### Scoop (Windows, planeado)
+### Scoop (Windows)
 
-Próximamente: `scoop install sftp-sync` vía bucket dedicado. Mientras tanto,
-usá los métodos de arriba.
+```powershell
+scoop bucket add shizuka https://github.com/ShizukaJiku/scoop-bucket
+scoop install sftp-sync
+```
+
+`scoop update sftp-sync` te trae la última release automáticamente (el manifest
+tiene `checkver`/`autoupdate` apuntando a las GitHub Releases).
 
 ### Construcción desde source
 
