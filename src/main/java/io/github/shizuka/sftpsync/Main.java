@@ -15,6 +15,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.ScopeType;
 
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+
 /**
  * Entry point del CLI.
  *
@@ -73,6 +76,12 @@ public final class Main implements Runnable {
     }
 
     public static void main(String[] args) {
+        // Forzar UTF-8 en stdout/stderr para que las tildes y eñes salgan bien
+        // en Windows PowerShell por default (que usa CP1252) y otras terminales
+        // que no tienen UTF-8 como charset nativo. Independiente del locale del SO.
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+
         int exitCode = new CommandLine(new Main()).execute(args);
         System.exit(exitCode);
     }
