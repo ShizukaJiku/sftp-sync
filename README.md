@@ -46,6 +46,32 @@ Opciones notables:
   server. Para workloads YAML/código/JSON puede reducir bytes en el wire 3-5×.
   Si el server no la soporta, degrada limpio a `none`.
 
+## Filtros (`.syncignore`)
+
+Qué se sincroniza y qué no lo decide la combinación de dos fuentes:
+
+1. **Defaults built-in** en `.sync/config.json` campo `ignore`:
+   `.sync/`, `.git/`, `target/`, `build/`, `node_modules/`, `.idea/`, `.vscode/`,
+   `*.class`, `*.log`. Editables si querés.
+2. **`.syncignore`** en la raíz del proyecto. Sintaxis idéntica a `.gitignore`
+   (comments con `#`, negación con `!`, anclaje con `/`, globs `*`/`?`/`**`).
+   `init` bootstrappea uno con ejemplos comunes; lo editás según tu proyecto.
+
+> **`.syncignore` NO es `.gitignore`.** Lo que excluís de git no necesariamente
+> coincide con lo que querés excluir del sync — típico: un `lib/*.jar` que git
+> ignora pero que SÍ querés compartir entre PCs. sftp-sync **no lee
+> `.gitignore`** deliberadamente.
+
+Ejemplo de `.syncignore` para des-ignorar un jar:
+
+```gitignore
+# Patrones extra propios del proyecto
+*.swp
+
+# Des-ignorar un jar que algún default filtraría
+!lib/important.jar
+```
+
 ## Instalación
 
 Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~67 MB.

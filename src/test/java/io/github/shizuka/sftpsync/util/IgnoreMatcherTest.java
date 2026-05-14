@@ -145,17 +145,17 @@ class IgnoreMatcherTest {
         assertThat(m.matches("other/foo/bar")).isFalse();
     }
 
-    // ---- Carga desde .gitignore ----
+    // ---- Carga desde .syncignore ----
 
     @Test
-    @DisplayName("fromConfig reads .gitignore if useGitignore=true and file exists")
-    void fromConfig_readsGitignore(@TempDir Path tmp) throws IOException {
-        Files.writeString(tmp.resolve(".gitignore"),
+    @DisplayName("fromConfig reads .syncignore if file exists")
+    void fromConfig_readsSyncignore(@TempDir Path tmp) throws IOException {
+        Files.writeString(tmp.resolve(".syncignore"),
             "# build artifacts\n"
             + "target/\n"
             + "*.class\n"
             + "!important.class\n");
-        SyncConfig cfg = configWithUseGitignore(true);
+        SyncConfig cfg = baseConfig();
 
         IgnoreMatcher m = IgnoreMatcher.fromConfig(tmp, cfg);
 
@@ -166,32 +166,33 @@ class IgnoreMatcherTest {
     }
 
     @Test
-    @DisplayName("fromConfig skips .gitignore when useGitignore=false")
-    void fromConfig_skipsGitignoreWhenDisabled(@TempDir Path tmp) throws IOException {
+    @DisplayName("fromConfig ignores .gitignore — it is no longer consulted")
+    void fromConfig_ignoresGitignoreFile(@TempDir Path tmp) throws IOException {
+        // Histórico: sftp-sync leía .gitignore. Ya no. Solo .syncignore aplica.
         Files.writeString(tmp.resolve(".gitignore"), "*.class\n");
-        SyncConfig cfg = configWithUseGitignore(false);
+        SyncConfig cfg = baseConfig();
 
         IgnoreMatcher m = IgnoreMatcher.fromConfig(tmp, cfg);
 
+        // El *.class de .gitignore no debe bloquear: NO se lee ese archivo.
         assertThat(m.matches("Foo.class")).isFalse();
     }
 
     @Test
-    @DisplayName("fromConfig works without a .gitignore file")
-    void fromConfig_noGitignoreFile(@TempDir Path tmp) throws IOException {
-        SyncConfig cfg = configWithUseGitignore(true);
+    @DisplayName("fromConfig works without a .syncignore file")
+    void fromConfig_noSyncignoreFile(@TempDir Path tmp) throws IOException {
+        SyncConfig cfg = baseConfig();
         IgnoreMatcher m = IgnoreMatcher.fromConfig(tmp, cfg);
         // Solo los patterns de config aplican.
         assertThat(m.matches("target/foo")).isTrue();
         assertThat(m.matches("anything-else")).isFalse();
     }
 
-    private static SyncConfig configWithUseGitignore(boolean enabled) {
+    private static SyncConfig baseConfig() {
         return new SyncConfig(
             "client-id",
             new RemoteConfig("h", 22, "u", "/k", "/r", null),
             List.of("target/"),
-            enabled,
             200,
             new WatchConfig(0, 0)
         );

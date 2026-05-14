@@ -22,7 +22,6 @@ class ManifestBuilderTest {
             "test-client",
             new RemoteConfig("h", 22, "u", "/k", "/r", null),
             ignore,
-            false,
             maxFileSizeMB,
             WatchConfig.defaults()
         );

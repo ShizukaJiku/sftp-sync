@@ -21,7 +21,6 @@ public record SyncConfig(
     String clientId,
     RemoteConfig remote,
     List<String> ignore,
-    boolean useGitignore,
     int maxFileSizeMB,
     WatchConfig watch
 ) {
@@ -52,7 +51,6 @@ public record SyncConfig(
             UUID.randomUUID().toString(),
             RemoteConfig.of(null, null, null, null),
             defaultIgnorePatterns(),
-            true,
             200,
             WatchConfig.defaults()
         );
