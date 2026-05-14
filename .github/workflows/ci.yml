@@ -95,14 +95,23 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y upx-ucl
 
-      - name: Install UPX (Windows)
+      # Windows: pineamos UPX 4.2.4 (no la 5.x más nueva de choco). Las versiones
+      # 5.x de UPX tienen regresiones conocidas con PE32+ generados por
+      # GraalVM Native Image — comprimen sin error pero el .exe resultante falla
+      # al cargar con exit 193 (ERROR_BAD_EXE_FORMAT). 4.2.x es más conservador.
+      - name: Install UPX 4.2.4 (Windows)
         if: runner.os == 'Windows'
-        run: choco install upx -y --no-progress
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip -OutFile upx.zip
+          Expand-Archive upx.zip -DestinationPath C:\upx -Force
+          Add-Content $env:GITHUB_PATH "C:\upx\upx-4.2.4-win64"
+          C:\upx\upx-4.2.4-win64\upx.exe --version
 
-      # UPX --lzma rompe PE32+ binaries en Windows en versiones recientes (corrupt
-      # output que falla al cargar con exit 193). En Linux funciona bien. Por eso
-      # usamos --lzma solo en Linux y --best (sin LZMA) en Windows. Si igual el
-      # binario comprimido no corre, restauramos el original (best-effort).
+      # UPX en Windows: usamos -1 (compresión rápida, menos agresiva) que tiende
+      # a producir binarios PE más estables que --best. En Linux ELF, --best --lzma
+      # funciona bien (validado en v0.1.0). Si la compresión rompe el binario, lo
+      # restauramos al original (best-effort: nunca bloquear el release por UPX).
       - name: Compress with UPX
         shell: bash
         run: |
@@ -112,7 +121,7 @@ jobs:
           if [[ "${{ runner.os }}" == "Linux" ]]; then
             upx --best --lzma "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
           else
-            upx --best "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
+            upx -1 "$BIN" || (echo "UPX failed, restoring"; cp "$BIN.orig" "$BIN")
           fi
           if ! "$BIN" --help >/dev/null 2>&1; then
             echo "Compressed binary broken, restoring original"
