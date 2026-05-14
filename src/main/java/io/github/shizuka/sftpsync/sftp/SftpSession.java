@@ -53,16 +53,18 @@ public final class SftpSession implements AutoCloseable {
     private static final int OPERATION_TIMEOUT_MS = 30_000;
 
     static {
-        // sshj 0.40 puede correr sin BouncyCastle usando los providers JDK
-        // (SunJCE + SunEC). Eso da AES-256-CTR/GCM, ssh-rsa, ssh-ed25519 y
-        // ECDH — más que suficiente para emberstack/OpenSSH (que negocia
-        // AES-256-CTR sin problema). Sin BC, sshj loguea ~17 warnings al
-        // arrancar ("Cipher [X] disabled") que son ruido pero no rompen nada.
+        // sshj 0.40 + BC + native-image es incompatible (issue hierynomus/sshj#871):
+        // sshj internamente crea una nueva instancia de BouncyCastleProvider via
+        // Class.forName().newInstance() en SecurityUtils.registerSecurityProvider,
+        // y JCE en native-image rechaza esa instancia que no fue verificada en
+        // build time. Aunque tengamos BC pre-registrado, sshj insiste en re-crear
+        // su propia instancia. Probado en GraalVM 21 y 25, mismo resultado.
         //
-        // Mantener BC desactivado simplifica el build native-image: no hay
-        // que verificar el provider en build time ni declarar 100 clases en
-        // --initialize-at-build-time. Ver issue hierynomus/sshj#782 para el
-        // contexto histórico.
+        // Solución pragmática: dejar BC desactivado y usar los providers JDK
+        // (SunJCE + SunEC). Eso da AES-256-CTR/GCM, ssh-rsa, ssh-ed25519 y ECDH —
+        // suficiente para OpenSSH/emberstack. sshj loguea ~17 warnings al inicio
+        // ("Cipher [X] disabled") que son cosméticos. Cuando sshj#871 se mergee,
+        // podemos restaurar BC.
         SecurityUtils.setRegisterBouncyCastle(false);
     }
 

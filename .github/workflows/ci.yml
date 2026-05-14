@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, development]
   workflow_dispatch:
 
 permissions:
@@ -22,10 +22,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up GraalVM JDK 25
+      - name: Set up GraalVM JDK 21
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
+          java-version: '21'
           distribution: 'graalvm-community'
           cache: 'maven'
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +44,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────
   # Binarios nativos. Costoso (~3–8 min por OS), corre solo en
-  # push a main, tags, o disparo manual desde la UI de Actions.
+  # push a main/development, tags, o disparo manual desde la UI.
   # PRs solo corren JVM tests para no quemar minutos.
   # ─────────────────────────────────────────────────────────────
   native:
@@ -62,18 +62,15 @@ jobs:
           - os: windows-latest
             artifact: sftp-sync-windows-x64
             binary: sftp-sync.exe
-          - os: macos-latest
-            artifact: sftp-sync-macos-arm64
-            binary: sftp-sync
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up GraalVM JDK 25
+      - name: Set up GraalVM JDK 21
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
+          java-version: '21'
           distribution: 'graalvm-community'
           cache: 'maven'
           native-image-job-reports: 'true'
@@ -86,6 +83,26 @@ jobs:
         shell: bash
         run: ./target/${{ matrix.binary }} --help
 
+      # ─── Compresión UPX para reducir tamaño del binario ~75% ───
+      - name: Install UPX (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y upx-ucl
+
+      - name: Install UPX (Windows)
+        if: runner.os == 'Windows'
+        run: choco install upx -y --no-progress
+
+      - name: Compress with UPX
+        shell: bash
+        run: |
+          ls -lh target/${{ matrix.binary }}
+          upx --best --lzma target/${{ matrix.binary }}
+          ls -lh target/${{ matrix.binary }}
+
+      - name: Verify compressed binary still works
+        shell: bash
+        run: ./target/${{ matrix.binary }} --help
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +112,8 @@ jobs:
           retention-days: 30
 
   # ─────────────────────────────────────────────────────────────
-  # En tags vX.Y.Z: crear un GitHub Release y adjuntar los 3 binarios.
+  # En tags vX.Y.Z: crear un GitHub Release y adjuntar binarios.
+  # Solo desde main (tags se crean ahí).
   # ─────────────────────────────────────────────────────────────
   release:
     name: Publish release
@@ -110,11 +128,15 @@ jobs:
         with:
           path: artifacts
 
+      - name: Rename binaries to include platform
+        run: |
+          mv artifacts/sftp-sync-linux-x64/sftp-sync artifacts/sftp-sync-linux-x64.bin
+          mv artifacts/sftp-sync-windows-x64/sftp-sync.exe artifacts/sftp-sync-windows-x64.exe
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/sftp-sync-linux-x64/sftp-sync
-            artifacts/sftp-sync-windows-x64/sftp-sync.exe
-            artifacts/sftp-sync-macos-arm64/sftp-sync
+            artifacts/sftp-sync-linux-x64.bin
+            artifacts/sftp-sync-windows-x64.exe
           generate_release_notes: true
