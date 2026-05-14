@@ -279,7 +279,12 @@ public final class InitCommand implements Callable<Integer> {
                 "Nombre de carpeta '" + folderName
                     + "' no es válido como segmento remoto: " + issue);
         }
-        String trimmedParent = parent.endsWith("/") && parent.length() > 1
+        // Caso "/" (parent es la raíz): el remoteRoot es "/" + folderName, NO
+        // "//folderName" — algunos servers SFTP tratan "//" como ruta distinta.
+        if ("/".equals(parent)) {
+            return "/" + folderName;
+        }
+        String trimmedParent = parent.endsWith("/")
             ? parent.substring(0, parent.length() - 1)
             : parent;
         return trimmedParent + "/" + folderName;

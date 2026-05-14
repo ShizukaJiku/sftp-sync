@@ -187,7 +187,8 @@ public final class PullCommand implements Callable<Integer> {
             // Ejecutar descargas (paralelo si N > 1 y hay tasks).
             List<DownloadResult> results = tasks.isEmpty()
                 ? List.of()
-                : runDownloads(tasks, config.remote(), mode, remoteRoot, root, workers);
+                : runDownloads(tasks, primary, config.remote(), mode, remoteRoot,
+                    root, workers, err);
 
             // Output ordenado: primero conflicts no-op, luego results de descargas, ambos por relPath.
             List<DownloadResult> all = new ArrayList<>(noopConflicts.size() + results.size());
@@ -243,33 +244,49 @@ public final class PullCommand implements Callable<Integer> {
     }
 
     /**
-     * Abre un pool de N sesiones (N = min(workers, tasks.size())) y ejecuta las
-     * descargas en paralelo. Cada thread del pool toma una sesión libre del
-     * {@link BlockingQueue}, hace la descarga, y devuelve la sesión.
+     * Ejecuta las descargas en paralelo sobre un pool de hasta N sesiones SFTP.
      *
-     * <p>Si alguna sesión del pool falla al abrirse, cierra las que ya abrió y
-     * tira {@link IOException}. Las sesiones se cierran siempre en {@code finally}.
+     * <p>El pool <b>reutiliza la sesión principal</b> (la que ya está abierta para
+     * fetch del manifest y operaciones secuenciales) y abre hasta {@code N - 1}
+     * sesiones adicionales. Si el servidor rechaza alguna de las adicionales (ej.
+     * MaxStartups / MaxSessions de OpenSSH), degrada el pool al tamaño efectivo
+     * y emite un warning a stderr — el pull SIGUE funcionando, solo con menos
+     * paralelismo. Mínimo garantizado: 1 worker (la primary).
+     *
+     * <p>Las sesiones extras se cierran en {@code finally}. La primary la cierra
+     * el caller via try-with-resources, NO esta función.
+     *
+     * <p><b>Nota de thread-safety:</b> {@code SftpClient} de MINA NO es
+     * thread-safe; por eso cada worker necesita una sesión propia. La primary
+     * está IDLE mientras los workers corren (su único uso post-runDownloads son
+     * los deletes locales, que son operaciones de filesystem, no SFTP), por lo
+     * que reusarla acá es seguro.
      */
     private static List<DownloadResult> runDownloads(
-            List<DownloadTask> tasks, RemoteConfig remote, HostKeyMode mode,
-            String remoteRoot, Path root, int workersRequested) throws IOException {
-        int n = Math.min(workersRequested, tasks.size());
+            List<DownloadTask> tasks, SftpSession primary, RemoteConfig remote,
+            HostKeyMode mode, String remoteRoot, Path root,
+            int workersRequested, PrintWriter err) {
+        int requested = Math.min(workersRequested, tasks.size());
+        int poolCapacity = Math.max(requested, 1);
 
-        List<SftpSession> opened = new ArrayList<>(n);
-        BlockingQueue<SftpSession> pool = new ArrayBlockingQueue<>(n);
-        try {
-            for (int i = 0; i < n; i++) {
+        BlockingQueue<SftpSession> pool = new ArrayBlockingQueue<>(poolCapacity);
+        pool.add(primary);
+        List<SftpSession> extras = new ArrayList<>(Math.max(0, requested - 1));
+        for (int i = 1; i < requested; i++) {
+            try {
                 SftpSession s = SftpSession.open(remote, mode);
-                opened.add(s);
+                extras.add(s);
                 pool.add(s);
+            } catch (IOException e) {
+                err.println("warning: solo " + (1 + extras.size())
+                    + " de " + requested + " sesiones SFTP abrieron OK ("
+                    + e.getMessage() + "). Continuando con menos workers.");
+                break;
             }
-        } catch (IOException e) {
-            for (SftpSession s : opened) closeQuietly(s);
-            throw new IOException("Error abriendo pool de " + n + " sesiones: "
-                + e.getMessage(), e);
         }
+        int actualWorkers = pool.size();
 
-        ExecutorService exec = Executors.newFixedThreadPool(n, r -> {
+        ExecutorService exec = Executors.newFixedThreadPool(actualWorkers, r -> {
             Thread t = new Thread(r, "pull-worker");
             t.setDaemon(true);
             return t;
@@ -302,7 +319,9 @@ public final class PullCommand implements Callable<Integer> {
                 Thread.currentThread().interrupt();
                 exec.shutdownNow();
             }
-            for (SftpSession s : opened) closeQuietly(s);
+            // SOLO cerramos las sesiones extras. La primary la cierra el caller
+            // via try-with-resources.
+            for (SftpSession s : extras) closeQuietly(s);
         }
     }
 

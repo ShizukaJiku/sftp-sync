@@ -192,4 +192,26 @@ class InitCommandTest {
         );
         assertThat(exit).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("init with --remote-parent / produces single-slash remoteRoot, not //")
+    void init_remoteParentRoot_avoidsDoubleSlash(@TempDir Path tmp) throws IOException {
+        // Codex review P2: --remote-parent "/" debe dar "/folderName" no "//folderName".
+        // Algunos servers SFTP interpretan "//" como una ruta distinta o fallan.
+        Path projectDir = tmp.resolve("myproj");
+        Files.createDirectories(projectDir);
+
+        int exit = newCli().execute(
+            "-C", projectDir.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u",
+            "--key", "/k", "--remote-parent", "/"
+        );
+
+        assertThat(exit).isZero();
+        SyncConfig loaded = SyncConfigStore.load(projectDir);
+        assertThat(loaded.remote().remoteRoot())
+            .isEqualTo("/myproj")
+            .doesNotStartWith("//");
+    }
 }
