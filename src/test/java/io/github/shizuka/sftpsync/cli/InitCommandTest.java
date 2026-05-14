@@ -11,6 +11,7 @@ import picocli.CommandLine;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -128,4 +129,67 @@ class InitCommandTest {
         assertThat(exit).isEqualTo(2);
     }
 
+    @Test
+    @DisplayName("init with --remote-parent appends current folder name")
+    void init_remoteParentFlag_computesRemoteRoot(@TempDir Path tmp) throws IOException {
+        // @TempDir crea un directorio cuyo nombre incluye chars válidos (junit-XXXX).
+        // Verificamos que el remoteRoot se compone como parent + "/" + folderName.
+        Path projectDir = tmp.resolve("myproj");
+        Files.createDirectories(projectDir);
+
+        int exit = newCli().execute(
+            "-C", projectDir.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u",
+            "--key", "/k", "--remote-parent", "/sftp"
+        );
+
+        assertThat(exit).isZero();
+        SyncConfig loaded = SyncConfigStore.load(projectDir);
+        assertThat(loaded.remote().remoteRoot()).isEqualTo("/sftp/myproj");
+    }
+
+    @Test
+    @DisplayName("init normalizes --remote-parent trailing slash")
+    void init_remoteParentTrailingSlash_normalizesRemoteRoot(@TempDir Path tmp) throws IOException {
+        Path projectDir = tmp.resolve("myproj");
+        Files.createDirectories(projectDir);
+
+        int exit = newCli().execute(
+            "-C", projectDir.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u",
+            "--key", "/k", "--remote-parent", "/sftp/"
+        );
+
+        assertThat(exit).isZero();
+        SyncConfig loaded = SyncConfigStore.load(projectDir);
+        assertThat(loaded.remote().remoteRoot()).isEqualTo("/sftp/myproj");
+    }
+
+    @Test
+    @DisplayName("init rejects --remote-parent when --remote-root is also given")
+    void init_bothRemoteRootAndParent_returnsExit2(@TempDir Path tmp) {
+        int exit = newCli().execute(
+            "-C", tmp.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u", "--key", "/k",
+            "--remote-root", "/upload/x",
+            "--remote-parent", "/sftp"
+        );
+        assertThat(exit).isEqualTo(2);
+        assertThat(SyncConfigStore.exists(tmp)).isFalse();
+    }
+
+    @Test
+    @DisplayName("init rejects relative --remote-parent")
+    void init_relativeRemoteParent_returnsExit2(@TempDir Path tmp) {
+        int exit = newCli().execute(
+            "-C", tmp.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u", "--key", "/k",
+            "--remote-parent", "sftp"
+        );
+        assertThat(exit).isEqualTo(2);
+    }
 }

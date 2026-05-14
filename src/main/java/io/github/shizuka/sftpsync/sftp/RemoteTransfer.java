@@ -1,5 +1,6 @@
 package io.github.shizuka.sftpsync.sftp;
 
+import io.github.shizuka.sftpsync.util.Hashing;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClient.Attributes;
 import org.apache.sshd.sftp.client.SftpClient.DirEntry;
@@ -11,6 +12,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -68,13 +71,30 @@ public final class RemoteTransfer {
         PosixRename.overwrite(sftp, stagedPath, finalPath);
     }
 
-    public static void download(SftpClient sftp, String remotePath, Path localTarget)
+    /**
+     * Descarga {@code remotePath} a {@code localTarget} y devuelve su SHA-256
+     * hex calculado en streaming, sin releer el archivo del disco.
+     *
+     * <p>Equivalente a la combinación de {@code download(...)} + {@code
+     * Hashing.sha256(localTarget)} pero en una sola pasada: el byte stream
+     * de la SFTP read se va alimentando simultáneamente al {@code OutputStream}
+     * del archivo local y al {@code MessageDigest}. Para archivos chicos el
+     * ahorro es marginal; para 120 MB son ~0.5 s menos de I/O de disco.
+     *
+     * <p>Crea los directorios padre del target si no existen.
+     *
+     * @return SHA-256 hex lowercase del contenido descargado.
+     */
+    public static String downloadAndHash(SftpClient sftp, String remotePath, Path localTarget)
             throws IOException {
         Files.createDirectories(localTarget.getParent());
+        MessageDigest md = Hashing.newSha256Digest();
         try (InputStream is = sftp.read(remotePath);
+             DigestInputStream dis = new DigestInputStream(is, md);
              OutputStream os = Files.newOutputStream(localTarget)) {
-            is.transferTo(os);
+            dis.transferTo(os);
         }
+        return Hashing.hex(md.digest());
     }
 
     public static boolean deleteRemote(SftpClient sftp, String remotePath) throws IOException {

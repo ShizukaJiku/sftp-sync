@@ -7,7 +7,9 @@ import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier;
 import org.apache.sshd.client.keyverifier.KnownHostsServerKeyVerifier;
 import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.compression.BuiltinCompressions;
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider;
+import org.apache.sshd.sftp.SftpModuleProperties;
 import org.apache.sshd.sftp.client.SftpClient;
 import org.apache.sshd.sftp.client.SftpClientFactory;
 import org.slf4j.Logger;
@@ -17,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -34,6 +37,14 @@ public final class SftpSession implements AutoCloseable {
 
     private static final long CONNECT_TIMEOUT_SECONDS = 15;
     private static final long OPERATION_TIMEOUT_SECONDS = 30;
+
+    /**
+     * Tamaño de buffer para reads SFTP. Default MINA = 32 KB; subimos a 256 KB
+     * para reducir round trips en archivos grandes. El server puede limitar
+     * vía SSH packet size, en cuyo caso MINA negocia el efectivo automáticamente.
+     */
+    private static final int SFTP_READ_BUFFER_BYTES = 256 * 1024;
+    private static final int SFTP_WRITE_BUFFER_BYTES = 256 * 1024;
 
     static {
         // Asegurar que BC se registre. En native-image este clinit corre en
@@ -80,6 +91,14 @@ public final class SftpSession implements AutoCloseable {
 
         SshClient client = SshClient.setUpDefaultClient();
         configureHostKeyVerification(client, mode, config.host());
+        // Habilitar compresión zlib. Orden de preferencia: zlib@openssh.com (delayed,
+        // se activa tras la autenticación → más seguro), zlib (always-on), none (sin
+        // compresión). El server elige según lo que soporte; si no soporta ninguna,
+        // negocia `none` automáticamente sin error.
+        client.setCompressionFactories(List.of(
+            BuiltinCompressions.delayedZlib,
+            BuiltinCompressions.zlib,
+            BuiltinCompressions.none));
         if (resolvedKeyPath != null) {
             client.setKeyIdentityProvider(new FileKeyPairProvider(Paths.get(resolvedKeyPath)));
         }
@@ -95,6 +114,10 @@ public final class SftpSession implements AutoCloseable {
                 session.addPasswordIdentity(config.password());
             }
             session.auth().verify(OPERATION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            // Aumentar buffer SFTP antes de crear el cliente — el SftpClient
+            // hereda las propiedades del session via PropertyResolver chain.
+            SftpModuleProperties.READ_BUFFER_SIZE.set(session, SFTP_READ_BUFFER_BYTES);
+            SftpModuleProperties.WRITE_BUFFER_SIZE.set(session, SFTP_WRITE_BUFFER_BYTES);
             sftp = SftpClientFactory.instance().createSftpClient(session);
             return new SftpSession(client, session, sftp);
         } catch (IOException e) {

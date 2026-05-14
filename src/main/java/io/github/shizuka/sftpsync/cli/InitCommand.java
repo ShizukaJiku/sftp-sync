@@ -6,6 +6,7 @@ import io.github.shizuka.sftpsync.config.SyncConfig;
 import io.github.shizuka.sftpsync.config.SyncConfigStore;
 import io.github.shizuka.sftpsync.config.WatchConfig;
 import io.github.shizuka.sftpsync.util.PathExpansion;
+import io.github.shizuka.sftpsync.util.PathValidation;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.ParentCommand;
@@ -57,8 +58,17 @@ public final class InitCommand implements Callable<Integer> {
             description = "Password SFTP. Mutuamente exclusivo con --key. AVISO: queda en plain text en config.json.")
     String password;
 
-    @Option(names = "--remote-root", description = "Carpeta absoluta en el remoto (ej. /upload/proyecto).")
+    @Option(names = "--remote-root",
+            description = "Carpeta absoluta en el remoto (ej. /upload/proyecto). "
+                + "Mutuamente exclusivo con --remote-parent.")
     String remoteRoot;
+
+    @Option(names = "--remote-parent",
+            description = "Carpeta padre absoluta en el remoto (ej. /sftp). "
+                + "El nombre de la carpeta local actual se anexa para formar el "
+                + "remoteRoot. Atajo de --remote-root cuando querés que el remoto "
+                + "espeje el nombre del proyecto.")
+    String remoteParent;
 
     @Option(names = "--force",       description = "Sobrescribir un .sync/config.json existente.")
     boolean force;
@@ -77,6 +87,13 @@ public final class InitCommand implements Callable<Integer> {
             return 1;
         }
 
+        if (remoteRoot != null && !remoteRoot.isBlank()
+            && remoteParent != null && !remoteParent.isBlank()) {
+            err("Error: --remote-root y --remote-parent son mutuamente exclusivos. "
+                + "Usá uno u otro.");
+            return 2;
+        }
+
         String resolvedHost;
         String resolvedUser;
         String resolvedRoot;
@@ -85,7 +102,11 @@ public final class InitCommand implements Callable<Integer> {
         try {
             resolvedHost = ask("Host del SFTP", host, null);
             resolvedUser = ask("Usuario SFTP", user, null);
-            resolvedRoot = ask("Carpeta absoluta en el remoto", remoteRoot, null);
+            if (remoteParent != null && !remoteParent.isBlank()) {
+                resolvedRoot = resolveRootFromParent(remoteParent.trim(), root);
+            } else {
+                resolvedRoot = ask("Carpeta absoluta en el remoto", remoteRoot, null);
+            }
 
             // Selección de método de autenticación.
             if (keyPath != null && !keyPath.isBlank()) {
@@ -216,6 +237,52 @@ public final class InitCommand implements Callable<Integer> {
             throw new IllegalStateException("Password vacío");
         }
         return new String(chars);
+    }
+
+    /**
+     * Resuelve {@code remoteRoot} a partir de {@code --remote-parent} + el nombre
+     * de la carpeta local actual.
+     *
+     * <p>Validaciones:
+     * <ul>
+     *   <li>{@code parent} debe empezar con "/".</li>
+     *   <li>El cwd debe tener un nombre extraíble (falla en {@code C:\\} y similares).</li>
+     *   <li>El folder name debe ser válido como segmento de path Windows
+     *       (rechaza {@code CON}, {@code PRN}, {@code AUX}, etc.).</li>
+     * </ul>
+     *
+     * <p>Edge case: en Windows con UNC paths como {@code \\\\server\\share},
+     * {@code getFileName} devuelve {@code share}, lo que es comportamiento
+     * aceptable aunque atípico — el user lo verá en el resumen final.
+     *
+     * @throws IllegalStateException si alguna validación falla.
+     */
+    static String resolveRootFromParent(String parent, Path cwd) {
+        if (!parent.startsWith("/")) {
+            throw new IllegalStateException(
+                "--remote-parent debe empezar con '/'. Recibido: " + parent);
+        }
+        Path folder = cwd.getFileName();
+        if (folder == null) {
+            throw new IllegalStateException(
+                "No se puede inferir nombre de carpeta desde " + cwd
+                    + " (ej. raíz del filesystem). Usá --remote-root explícito.");
+        }
+        String folderName = folder.toString();
+        if (folderName.isBlank() || folderName.contains("/") || folderName.contains("\\")) {
+            throw new IllegalStateException(
+                "Nombre de carpeta inválido: '" + folderName + "'");
+        }
+        String issue = PathValidation.findWindowsIssue(folderName);
+        if (issue != null) {
+            throw new IllegalStateException(
+                "Nombre de carpeta '" + folderName
+                    + "' no es válido como segmento remoto: " + issue);
+        }
+        String trimmedParent = parent.endsWith("/") && parent.length() > 1
+            ? parent.substring(0, parent.length() - 1)
+            : parent;
+        return trimmedParent + "/" + folderName;
     }
 
     private static void out(String s) { System.out.println(s); }
