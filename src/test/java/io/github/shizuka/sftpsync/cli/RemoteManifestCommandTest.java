@@ -62,9 +62,9 @@ class RemoteManifestCommandTest {
         int exit = newCli(new StringWriter(), err)
             .execute("-C", tmp.toString(), "remote-manifest", "--insecure");
 
-        // Puerto 1 cerrado → IOException al conectar → exit 5.
-        assertThat(exit).isEqualTo(5);
-        assertThat(err.toString()).containsIgnoringCase("conexión");
+        // MINA SSHD: connection-refused → SshException → EXIT_TRANSPORT (3).
+        assertThat(exit).isEqualTo(3);
+        assertThat(err.toString()).containsIgnoringCase("Error SSH");
     }
 
     @Test

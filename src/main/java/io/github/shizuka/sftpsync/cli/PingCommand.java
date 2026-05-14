@@ -5,10 +5,6 @@ import io.github.shizuka.sftpsync.config.SyncConfig;
 import io.github.shizuka.sftpsync.config.SyncConfigStore;
 import io.github.shizuka.sftpsync.sftp.SftpSession;
 import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
-import net.schmizz.sshj.sftp.FileAttributes;
-import net.schmizz.sshj.sftp.FileMode;
-import net.schmizz.sshj.transport.TransportException;
-import net.schmizz.sshj.userauth.UserAuthException;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -83,34 +79,29 @@ public final class PingCommand implements Callable<Integer> {
             out.println("OK. Server: " + session.serverVersion());
 
             String remoteRoot = config.remote().remoteRoot();
-            FileAttributes attrs = session.sftp().statExistence(remoteRoot);
-            if (attrs == null) {
-                err.println("La carpeta remota no existe: " + remoteRoot);
-                err.println("Creála en el server (mkdir -p " + remoteRoot + ")");
-                err.println("o ajustá --remote-root en la config.");
-                return 4;
+            org.apache.sshd.sftp.client.SftpClient.Attributes attrs;
+            try {
+                attrs = session.sftp().stat(remoteRoot);
+            } catch (org.apache.sshd.sftp.common.SftpException e) {
+                if (e.getStatus() == 2) {
+                    err.println("La carpeta remota no existe: " + remoteRoot);
+                    err.println("Creála en el server (mkdir -p " + remoteRoot + ")");
+                    err.println("o ajustá --remote-root en la config.");
+                    return 4;
+                }
+                throw e;
             }
-            if (attrs.getType() != FileMode.Type.DIRECTORY) {
+            if (!attrs.isDirectory()) {
                 err.println("El path remoto existe pero no es un directorio: " + remoteRoot);
                 return 4;
             }
 
-            int entryCount = session.sftp().ls(remoteRoot).size();
+            int entryCount = 0;
+            for (var _ : session.sftp().readDir(remoteRoot)) entryCount++;
             out.println("Carpeta remota OK: " + remoteRoot + " (" + entryCount + " entries)");
             return 0;
-
-        } catch (UserAuthException e) {
-            err.println("Autenticación falló: " + e.getMessage());
-            err.println("Verificá que el usuario y la clave SSH sean correctos.");
-            err.println("Si la clave tiene passphrase, NO está soportada en MVP.");
-            return 2;
-        } catch (TransportException e) {
-            err.println("Error SSH: " + e.getMessage());
-            err.println("Posibles causas: host key cambió, firewall, server caído.");
-            return 3;
         } catch (IOException e) {
-            err.println("Error de conexión: " + e.getMessage());
-            return 5;
+            return SftpErrors.mapToExitCode(e, err);
         }
     }
 }

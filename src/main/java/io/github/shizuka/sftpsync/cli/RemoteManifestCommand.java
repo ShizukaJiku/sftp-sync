@@ -9,8 +9,6 @@ import io.github.shizuka.sftpsync.manifest.ManifestStore;
 import io.github.shizuka.sftpsync.sftp.RemoteManifestStore;
 import io.github.shizuka.sftpsync.sftp.SftpSession;
 import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
-import net.schmizz.sshj.transport.TransportException;
-import net.schmizz.sshj.userauth.UserAuthException;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -94,16 +92,8 @@ public final class RemoteManifestCommand implements Callable<Integer> {
                 return doPut(session, root, remoteRoot, out, err);
             }
             return doGet(session, remoteRoot, out, err);
-
-        } catch (UserAuthException e) {
-            err.println("Autenticación falló: " + e.getMessage());
-            return 2;
-        } catch (TransportException e) {
-            err.println("Error SSH: " + e.getMessage());
-            return 3;
         } catch (IOException e) {
-            err.println("Error de conexión: " + e.getMessage());
-            return 5;
+            return SftpErrors.mapToExitCode(e, err);
         }
     }
 

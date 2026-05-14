@@ -1,6 +1,6 @@
 package io.github.shizuka.sftpsync.sftp;
 
-import net.schmizz.sshj.sftp.SFTPClient;
+import org.apache.sshd.sftp.client.SftpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,36 +11,17 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Hilo de fondo que refresca el {@code lastHeartbeatAt} del lock remoto cada
- * {@code ttlSeconds / 3} segundos. Mientras este heartbeat esté vivo, otros
- * clientes que vean el lock NO lo considerarán huérfano.
- *
- * <p>Uso:
- * <pre>{@code
- * LockInfo lock = RemoteLockManager.acquire(sftp, root, holder, "push", 300);
- * try (LockHeartbeat hb = LockHeartbeat.start(sftp, root, lock)) {
- *     // ...trabajo largo...
- * }
- * RemoteLockManager.release(sftp, root);
- * }</pre>
- *
- * <p><b>Importante:</b> el {@code SFTPClient} que recibe acá debe estar dedicado
- * al heartbeat. NO compartirlo con otro hilo que esté haciendo uploads/downloads
- * largos — sshj no es threadsafe para operaciones OPEN/WRITE concurrentes sobre
- * la misma sesión.
- */
 public final class LockHeartbeat implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(LockHeartbeat.class);
 
-    private final SFTPClient sftp;
+    private final SftpClient sftp;
     private final String remoteRoot;
     private final ScheduledExecutorService scheduler;
     private final ScheduledFuture<?> task;
     private LockInfo currentLock;
 
-    private LockHeartbeat(SFTPClient sftp, String remoteRoot, LockInfo initial,
+    private LockHeartbeat(SftpClient sftp, String remoteRoot, LockInfo initial,
                           ScheduledExecutorService scheduler, ScheduledFuture<?> task) {
         this.sftp = sftp;
         this.remoteRoot = remoteRoot;
@@ -49,11 +30,7 @@ public final class LockHeartbeat implements AutoCloseable {
         this.task = task;
     }
 
-    /**
-     * Arranca un heartbeat para el lock dado. Intervalo = {@code ttlSeconds / 3},
-     * mínimo 1 s para no encarar TTLs absurdos en tests.
-     */
-    public static LockHeartbeat start(SFTPClient sftp, String remoteRoot, LockInfo initial) {
+    public static LockHeartbeat start(SftpClient sftp, String remoteRoot, LockInfo initial) {
         int periodSec = Math.max(1, initial.ttlSeconds() / 3);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "lock-heartbeat");
@@ -61,7 +38,6 @@ public final class LockHeartbeat implements AutoCloseable {
             return t;
         });
         try {
-            // Holder construido vía referencia capturada para que el task tenga acceso.
             final LockHeartbeat[] ref = new LockHeartbeat[1];
             ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(
                 () -> { if (ref[0] != null) ref[0].tick(); },
@@ -85,7 +61,6 @@ public final class LockHeartbeat implements AutoCloseable {
         }
     }
 
-    /** Escribe el lock con un {@code lastHeartbeatAt} fresco. Sobrescribe atómicamente. */
     private void tick() {
         try {
             LockInfo refreshed = new LockInfo(

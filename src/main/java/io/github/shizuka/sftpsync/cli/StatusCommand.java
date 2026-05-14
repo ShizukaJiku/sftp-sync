@@ -15,8 +15,6 @@ import io.github.shizuka.sftpsync.sftp.SftpSession;
 import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
 import io.github.shizuka.sftpsync.watcher.StateStore;
 import io.github.shizuka.sftpsync.watcher.WatchState;
-import net.schmizz.sshj.transport.TransportException;
-import net.schmizz.sshj.userauth.UserAuthException;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -119,15 +117,8 @@ public final class StatusCommand implements Callable<Integer> {
         try (SftpSession session = SftpSession.open(config.remote(), mode)) {
             remoteManifest = RemoteManifestStore.loadOrEmpty(
                 session.sftp(), config.remote().remoteRoot(), config.clientId());
-        } catch (UserAuthException e) {
-            err.println("Autenticación falló: " + e.getMessage());
-            return 2;
-        } catch (TransportException e) {
-            err.println("Error SSH: " + e.getMessage());
-            return 3;
         } catch (IOException e) {
-            err.println("Error de conexión: " + e.getMessage());
-            return 5;
+            return SftpErrors.mapToExitCode(e, err);
         }
 
         // --- 3. Cargar base ---

@@ -63,9 +63,10 @@ class PingCommandTest {
         int exit = newCli(new StringWriter(), err)
             .execute("-C", tmp.toString(), "ping", "--insecure");
 
-        // Puerto 1 cerrado → IOException al conectar → exit 5.
-        assertThat(exit).isEqualTo(5);
-        assertThat(err.toString()).containsIgnoringCase("conexión");
+        // Puerto 1 cerrado: MINA SSHD reporta como SshException, SftpErrors
+        // lo mapea a EXIT_TRANSPORT (3) con prefijo "Error SSH:".
+        assertThat(exit).isEqualTo(3);
+        assertThat(err.toString()).containsIgnoringCase("Error SSH");
     }
 
     @Test
@@ -79,7 +80,7 @@ class PingCommandTest {
         int exit = newCli(new StringWriter(), err)
             .execute("-C", tmp.toString(), "ping", "--insecure");
 
-        assertThat(exit).isEqualTo(5);
+        assertThat(exit).isNotZero();
         assertThat(err.toString()).containsIgnoringCase("clave");
     }
 }

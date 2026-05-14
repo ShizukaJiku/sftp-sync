@@ -1,96 +1,62 @@
 package io.github.shizuka.sftpsync.sftp;
 
 import io.github.shizuka.sftpsync.config.RemoteConfig;
+import io.github.shizuka.sftpsync.nativesupport.BouncyCastleInitializer;
 import io.github.shizuka.sftpsync.util.PathExpansion;
-import net.schmizz.sshj.SSHClient;
-import net.schmizz.sshj.common.SecurityUtils;
-import net.schmizz.sshj.sftp.SFTPClient;
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
+import org.apache.sshd.client.SshClient;
+import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier;
+import org.apache.sshd.client.keyverifier.KnownHostsServerKeyVerifier;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.keyprovider.FileKeyPairProvider;
+import org.apache.sshd.sftp.client.SftpClient;
+import org.apache.sshd.sftp.client.SftpClientFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Sesión de conexión a un servidor SFTP, encapsulando el ciclo de vida del
- * {@link SSHClient} + {@link SFTPClient} de sshj.
+ * Sesión SFTP basada en Apache MINA SSHD (sshd-core + sshd-sftp).
  *
- * <p>Diseñado para uso con try-with-resources:
- * <pre>{@code
- * try (SftpSession s = SftpSession.open(remote, HostKeyMode.STRICT)) {
- *     s.sftp().ls(remoteRoot).forEach(System.out::println);
- * }
- * }</pre>
- *
- * <p><b>Verificación de host key:</b>
- * <ul>
- *   <li>{@code STRICT} (default): consulta {@code ~/.ssh/known_hosts}. Si el
- *       host no está, la conexión falla con un mensaje útil. Es la forma segura
- *       y recomendada.</li>
- *   <li>{@code INSECURE}: acepta cualquier host key sin chequear. Solo para
- *       debug / primer setup. NUNCA usar en producción.</li>
- * </ul>
- *
- * <p><b>Authentication:</b> ramifica según {@link RemoteConfig}:
- * <ul>
- *   <li>Si {@code hasKey()} — usa clave pública (sin passphrase soportada en MVP).</li>
- *   <li>Si {@code hasPassword()} — usa password.</li>
- *   <li>Si ambas — gana key auth.</li>
- *   <li>Si ninguna — falla con {@link IOException}.</li>
- * </ul>
+ * <p>Reemplaza la implementación con sshj que tenía issue #871 con BouncyCastle
+ * en native-image. MINA permite BC en native vía el patrón
+ * {@code --initialize-at-build-time=org.bouncycastle} + {@code rerun} para las
+ * clases con SecureRandom/DRBG. Ver pom.xml perfil {@code native}.
  */
 public final class SftpSession implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(SftpSession.class);
 
-    /** Timeout TCP del connect inicial. */
-    private static final int CONNECT_TIMEOUT_MS = 15_000;
-
-    /** Timeout para operaciones SSH/SFTP individuales. */
-    private static final int OPERATION_TIMEOUT_MS = 30_000;
+    private static final long CONNECT_TIMEOUT_SECONDS = 15;
+    private static final long OPERATION_TIMEOUT_SECONDS = 30;
 
     static {
-        // sshj 0.40 + BC + native-image es incompatible (issue hierynomus/sshj#871):
-        // sshj internamente crea una nueva instancia de BouncyCastleProvider via
-        // Class.forName().newInstance() en SecurityUtils.registerSecurityProvider,
-        // y JCE en native-image rechaza esa instancia que no fue verificada en
-        // build time. Aunque tengamos BC pre-registrado, sshj insiste en re-crear
-        // su propia instancia. Probado en GraalVM 21 y 25, mismo resultado.
-        //
-        // Solución pragmática: dejar BC desactivado y usar los providers JDK
-        // (SunJCE + SunEC). Eso da AES-256-CTR/GCM, ssh-rsa, ssh-ed25519 y ECDH —
-        // suficiente para OpenSSH/emberstack. sshj loguea ~17 warnings al inicio
-        // ("Cipher [X] disabled") que son cosméticos. Cuando sshj#871 se mergee,
-        // podemos restaurar BC.
-        SecurityUtils.setRegisterBouncyCastle(false);
+        // Asegurar que BC se registre. En native-image este clinit corre en
+        // build-time (snapshot del provider en image heap); en JVM normal corre
+        // al cargarse esta clase.
+        BouncyCastleInitializer.ensureInitialized();
     }
 
     public enum HostKeyMode {
-        /** Consulta ~/.ssh/known_hosts; falla si el host no está cacheado. */
         STRICT,
-        /** Acepta cualquier host key. Solo para debug/setup. */
         INSECURE
     }
 
-    private final SSHClient ssh;
-    private final SFTPClient sftp;
+    private final SshClient client;
+    private final ClientSession session;
+    private final SftpClient sftp;
 
-    private SftpSession(SSHClient ssh, SFTPClient sftp) {
-        this.ssh = ssh;
+    private SftpSession(SshClient client, ClientSession session, SftpClient sftp) {
+        this.client = client;
+        this.session = session;
         this.sftp = sftp;
     }
 
-    /**
-     * Abre una nueva sesión SFTP contra el remoto descrito por {@code config}.
-     *
-     * @param config datos de conexión (host, port, user, keyPath OR password).
-     * @param mode   política de verificación de host key.
-     * @throws IOException si falla cualquier paso (DNS, connect, host key,
-     *                     auth, key file no existe, sin auth method configurado).
-     */
     public static SftpSession open(RemoteConfig config, HostKeyMode mode) throws IOException {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(mode, "mode");
@@ -103,7 +69,7 @@ public final class SftpSession implements AutoCloseable {
         String resolvedKeyPath = null;
         if (config.hasKey()) {
             resolvedKeyPath = PathExpansion.expandTilde(config.keyPath());
-            Path keyFile = Path.of(resolvedKeyPath);
+            Path keyFile = Paths.get(resolvedKeyPath);
             if (!Files.exists(keyFile)) {
                 throw new IOException("Clave SSH no encontrada: " + keyFile);
             }
@@ -112,63 +78,77 @@ public final class SftpSession implements AutoCloseable {
             }
         }
 
-        SSHClient ssh = new SSHClient();
-        ssh.setConnectTimeout(CONNECT_TIMEOUT_MS);
-        ssh.setTimeout(OPERATION_TIMEOUT_MS);
+        SshClient client = SshClient.setUpDefaultClient();
+        configureHostKeyVerification(client, mode, config.host());
+        if (resolvedKeyPath != null) {
+            client.setKeyIdentityProvider(new FileKeyPairProvider(Paths.get(resolvedKeyPath)));
+        }
+        client.start();
 
+        ClientSession session = null;
+        SftpClient sftp = null;
         try {
-            configureHostKeyVerification(ssh, mode, config.host());
-            ssh.connect(config.host(), config.port());
-
-            if (resolvedKeyPath != null) {
-                ssh.authPublickey(config.user(), resolvedKeyPath);
-            } else {
-                ssh.authPassword(config.user(), config.password());
+            session = client.connect(config.user(), config.host(), config.port())
+                .verify(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .getSession();
+            if (config.hasPassword()) {
+                session.addPasswordIdentity(config.password());
             }
-
-            SFTPClient sftp = ssh.newSFTPClient();
-            return new SftpSession(ssh, sftp);
+            session.auth().verify(OPERATION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            sftp = SftpClientFactory.instance().createSftpClient(session);
+            return new SftpSession(client, session, sftp);
         } catch (IOException e) {
-            // Cualquier fallo en setup: cerramos lo que hayamos abierto.
-            try { ssh.close(); } catch (IOException ignore) { /* nada */ }
+            closeQuietly(sftp);
+            closeQuietly(session);
+            closeQuietly(client);
             throw e;
         }
     }
 
     private static void configureHostKeyVerification(
-            SSHClient ssh, HostKeyMode mode, String host) throws IOException {
+            SshClient client, HostKeyMode mode, String host) throws IOException {
         if (mode == HostKeyMode.INSECURE) {
             LOG.warn("Host key verification DISABLED (--insecure). MITM possible.");
-            ssh.addHostKeyVerifier(new PromiscuousVerifier());
+            client.setServerKeyVerifier(AcceptAllServerKeyVerifier.INSTANCE);
             return;
         }
-        try {
-            ssh.loadKnownHosts();
-        } catch (IOException e) {
+        Path knownHosts = Paths.get(System.getProperty("user.home"), ".ssh", "known_hosts");
+        if (!Files.exists(knownHosts)) {
             throw new IOException(
                 "No ~/.ssh/known_hosts encontrado. Opciones:\n"
                 + "  1. SSH una vez al server: ssh " + host + "\n"
-                + "  2. Usar --insecure (NO recomendado salvo primer setup)",
-                e);
+                + "  2. Usar --insecure (NO recomendado salvo primer setup)");
         }
+        client.setServerKeyVerifier(new KnownHostsServerKeyVerifier(
+            (s, addr, key) -> false,
+            knownHosts));
     }
 
-    /** SFTP client con todas las operaciones de filesystem remoto. */
-    public SFTPClient sftp() {
+    public SftpClient sftp() {
         return sftp;
     }
 
-    /** Versión del server SSH (banner string), útil para diagnóstico. */
     public String serverVersion() {
-        return ssh.getTransport().getServerVersion();
+        return session.getServerVersion();
     }
 
     @Override
     public void close() throws IOException {
-        try {
-            sftp.close();
-        } finally {
-            ssh.close();
+        IOException first = null;
+        try { if (sftp != null) sftp.close(); }
+        catch (IOException e) { first = e; }
+        try { if (session != null) session.close(); }
+        catch (IOException e) { if (first == null) first = e; else first.addSuppressed(e); }
+        try { if (client != null) client.stop(); }
+        catch (Exception e) {
+            IOException wrapped = e instanceof IOException io ? io : new IOException(e);
+            if (first == null) first = wrapped; else first.addSuppressed(wrapped);
         }
+        if (first != null) throw first;
+    }
+
+    private static void closeQuietly(AutoCloseable c) {
+        if (c == null) return;
+        try { c.close(); } catch (Exception _) {}
     }
 }
