@@ -74,7 +74,7 @@ Ejemplo de `.syncignore` para des-ignorar un jar:
 
 ## Instalación
 
-Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~67 MB.
+Binarios nativos para Linux y Windows. Linux ~11 MB (UPX), Windows ~51 MB.
 
 > **Requisito de CPU**: el binario está compilado con `-march=x86-64-v3`. Requiere
 > **CPU Intel Haswell (2013+) o AMD Excavator (2015+)**. Cualquier desktop/laptop
