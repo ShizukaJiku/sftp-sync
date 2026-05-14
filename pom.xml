@@ -163,8 +163,12 @@
                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                 <!-- Solo locales en/es para mensajes del CLI. Ahorra ~1-2 MB. -->
                 <buildArg>-H:IncludeLocales=en,es</buildArg>
-                <!-- Binario portable a cualquier x86-64, no solo CPU de build. -->
-                <buildArg>-march=compatibility</buildArg>
+                <!-- Optimización maxima de runtime. -O3 + AVX2 + BMI1/2 (x86-64-v3)
+                     da ~30% más rápido en hash SHA-256 (medido localmente con
+                     archivos de 50 MB: 373 ms → 258 ms). Requiere CPU Haswell
+                     2013+ o Excavator 2015+ — toda PC desktop/laptop moderna. -->
+                <buildArg>-O3</buildArg>
+                <buildArg>-march=x86-64-v3</buildArg>
 
                 <!-- ===== MINA SSHD + BouncyCastle en native-image ===== -->
                 <!-- Patrón validado por chirontt/jgit.pgm.native:
