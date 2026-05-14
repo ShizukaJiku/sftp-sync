@@ -43,6 +43,17 @@ public final class SftpErrors {
     }
 
     /**
+     * Variante silenciosa: solo clasifica el error en uno de los exit codes
+     * sin imprimir nada. Útil cuando el caller ya printeó su propio mensaje
+     * y solo necesita el exit code.
+     */
+    public static int mapToExitCodeRaw(IOException e) {
+        if (isAuthFailure(e)) return EXIT_AUTH;
+        if (e instanceof SshException) return EXIT_TRANSPORT;
+        return EXIT_IO;
+    }
+
+    /**
      * {@code true} si la cadena de causas sugiere un fallo de autenticación.
      * Hace dos pasadas: primero por nombre de clase (más confiable), después
      * por mensaje (heurística de fallback).

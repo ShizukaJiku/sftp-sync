@@ -5,6 +5,9 @@ import io.github.shizuka.sftpsync.config.RemoteConfig;
 import io.github.shizuka.sftpsync.config.SyncConfig;
 import io.github.shizuka.sftpsync.config.SyncConfigStore;
 import io.github.shizuka.sftpsync.config.WatchConfig;
+import io.github.shizuka.sftpsync.sftp.RemoteManifestStore;
+import io.github.shizuka.sftpsync.sftp.SftpSession;
+import io.github.shizuka.sftpsync.sftp.SftpSession.HostKeyMode;
 import io.github.shizuka.sftpsync.util.IgnoreMatcher;
 import io.github.shizuka.sftpsync.util.PathExpansion;
 import io.github.shizuka.sftpsync.util.PathValidation;
@@ -75,6 +78,21 @@ public final class InitCommand implements Callable<Integer> {
 
     @Option(names = "--force",       description = "Sobrescribir un .sync/config.json existente.")
     boolean force;
+
+    @Option(names = "--bootstrap-remote",
+            description = "Tras escribir la config, conectarse al server y crear "
+                + "<remoteRoot> si no existe. Default off — init es lazy por diseño "
+                + "y el primer push crea el remoto automáticamente. Útil cuando "
+                + "querés detectar problemas de conexión/credenciales ahora en vez "
+                + "de en el primer push, o cuando el parent (ej. /sftp) ya existe "
+                + "pero el subfolder específico no.")
+    boolean bootstrapRemote;
+
+    @Option(names = "--insecure",
+            description = "Aceptar cualquier host key (skip known_hosts). Solo aplica "
+                + "si se usa con --bootstrap-remote. Recomendado: hacer 'ssh <host>' "
+                + "una vez para popular ~/.ssh/known_hosts y NO usar --insecure.")
+    boolean insecure;
 
     @Option(names = "--non-interactive",
             description = "No prompts. Falla si falta algún valor obligatorio.")
@@ -182,10 +200,52 @@ public final class InitCommand implements Callable<Integer> {
             out("AVISO: el password quedó en plain text en config.json.");
             out("Recomendado: chmod 600 " + SyncConfigStore.configPath(root));
         }
-        out("");
-        out("(Nota: el módulo SFTP no transfiere datos todavía. Probá la conexión");
-        out(" con 'sftp-sync ping --insecure' para validarla.)");
+
+        if (bootstrapRemote) {
+            int code = bootstrapRemoteRoot(config);
+            if (code != 0) return code;
+        } else {
+            out("");
+            out("(Nota: el módulo SFTP no transfiere datos todavía. Probá la conexión");
+            out(" con 'sftp-sync ping --insecure' para validarla, o re-correr init");
+            out(" con --bootstrap-remote para crear " + resolvedRoot + " ahora.)");
+        }
         return 0;
+    }
+
+    /**
+     * Abre una sesión SFTP con la config recién escrita y crea {@code remoteRoot}
+     * en el servidor si no existe. El parent (típicamente {@code /sftp}) DEBE
+     * existir — sftp-sync asume que el admin del server ya lo provisionó.
+     *
+     * <p>Si el parent no existe o el user no tiene permisos para crearlo, falla
+     * con un mensaje claro y exit code 3 (SSH/auth).
+     *
+     * <p>{@link RemoteManifestStore#mkdirs} es recursivo y idempotente: si
+     * {@code remoteRoot} ya existe, retorna sin tocarlo. Si solo falta el último
+     * segmento (ej. {@code /sftp} existe pero {@code /sftp/proyecto-x} no), lo
+     * crea sin tocar el parent.
+     *
+     * @return exit code (0 si OK, 3 si SSH/auth, 5 si I/O).
+     */
+    private int bootstrapRemoteRoot(SyncConfig config) {
+        HostKeyMode mode = insecure ? HostKeyMode.INSECURE : HostKeyMode.STRICT;
+        String remoteRootResolved = config.remote().remoteRoot();
+        out("");
+        out("Bootstrap remoto: conectando a " + config.remote().host()
+            + ":" + config.remote().port() + " como " + config.remote().user() + "...");
+        try (SftpSession session = SftpSession.open(config.remote(), mode)) {
+            RemoteManifestStore.mkdirs(session.sftp(), remoteRootResolved);
+            out("Carpeta remota " + remoteRootResolved + " lista (creada o ya existía).");
+            return 0;
+        } catch (IOException e) {
+            err("");
+            err("Error en bootstrap remoto: " + e.getMessage());
+            err("La config local quedó escrita igual. Si el problema es de");
+            err("credenciales o permisos, corregí y reintentá con:");
+            err("  sftp-sync ping" + (insecure ? " --insecure" : ""));
+            return SftpErrors.mapToExitCodeRaw(e);
+        }
     }
 
     /**
