@@ -24,7 +24,7 @@ Tamaños objetivo: 10–120 MB, cientos de archivos, 2–5 PCs cliente.
 - **Pull**: descargar cambios remotos al disco local. Conflictos se marcan, no se aplican.
 - **Push**: subir cambios locales al remoto. Aborta si el remoto cambió desde el último sync (compare-and-swap por manifest).
 - **Watch**: proceso de fondo que mantiene el reporte de `status` fresco sin que el usuario corra el comando.
-- **Ignore**: respetar patrones `.gitignore` y patrones extra del usuario.
+- **Ignore**: respetar patrones de `.syncignore` (propio de sftp-sync, estilo gitignore) y patrones extra de `config.json`.
 - **Resolución manual de conflictos**: dejar artefactos `archivo.local-<host>` + `archivo.remote` y comando `resolve`.
 
 ### 2.2 No funcionales
@@ -195,7 +195,6 @@ Todo el estado vive en archivos JSON. Sin DB. Sin esquemas binarios. Auditable.
     ".idea/",
     ".sync/"
   ],
-  "useGitignore": true,
   "maxFileSizeMB": 200,
   "watch": {
     "pollIntervalSeconds": 30,
@@ -440,7 +439,7 @@ Cada operación falla de manera explícita y recuperable. Tabla:
 | `.sync/manifest.json` corrupto en remoto | JSON parse error | Abortar todas las ops. Sugerir restaurar desde `.sync/manifest.json.bak` (mantener última versión válida en backup). |
 | Path inválido en Windows (>260 chars, reserved name) | validación en deserialización de manifest | Skip archivo + warning. |
 | Disco lleno (local) durante pull | IOException en write | Borrar `.tmp` parcial, abortar pull, mensaje claro. |
-| `.gitignore` malformado | parser tolerante | Ignorar línea problemática, warning, continuar. |
+| `.syncignore` malformado | parser tolerante | Ignorar línea problemática, warning, continuar. |
 | Reloj local desincronizado | TTL del lock falla raro | Documentado. NTP recomendado. |
 
 ---
@@ -539,7 +538,7 @@ Orden propuesto, cada paso ejecutable y verificable contra el container de ember
 8. `PushCmd` v1: staging + posix-rename + manifest atómico + lock simple.
 9. `PullCmd` v1: download con tmp + ATOMIC_MOVE + verificación de hash.
 10. Heartbeat del lock + manejo de huérfanos.
-11. `IgnoreMatcher` con soporte `.gitignore`.
+11. `IgnoreMatcher` con parser estilo gitignore que lee `.syncignore` del proyecto.
 12. `ResolveCmd` para conflictos.
 13. `LocalWatcher` + `RemotePoller` + `state.json`. Comando `sync watch`.
 14. Hardening: re-hash pre-upload, validaciones de path Windows, `--gc` de staging.

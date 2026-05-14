@@ -37,7 +37,6 @@ class SyncConfigStoreTest {
             new RemoteConfig("test.example.com", 2222, "alice",
                              "/home/alice/.ssh/id_ed25519", "/upload/test-project", null),
             List.of("custom/pattern", "*.tmp"),
-            false,
             50,
             new WatchConfig(60, 1000)
         );
@@ -56,7 +55,6 @@ class SyncConfigStoreTest {
         assertThat(loaded.remote().keyPath()).isEqualTo("/home/alice/.ssh/id_ed25519");
         assertThat(loaded.remote().remoteRoot()).isEqualTo("/upload/test-project");
         assertThat(loaded.maxFileSizeMB()).isEqualTo(50);
-        assertThat(loaded.useGitignore()).isFalse();
         assertThat(loaded.watch().pollIntervalSeconds()).isEqualTo(60);
         assertThat(loaded.watch().debounceMs()).isEqualTo(1000);
         assertThat(loaded.ignore()).containsExactly("custom/pattern", "*.tmp");
@@ -97,7 +95,7 @@ class SyncConfigStoreTest {
     void save_nonAsciiHost_preservesUtf8(@TempDir Path tmp) throws IOException {
         SyncConfig c = new SyncConfig(
             "id", new RemoteConfig("úñíçødé.example.com", 22, "u", "/k", "/r", null),
-            List.of(), true, 100, WatchConfig.defaults()
+            List.of(), 100, WatchConfig.defaults()
         );
         SyncConfigStore.save(tmp, c);
 
@@ -125,7 +123,7 @@ class SyncConfigStoreTest {
     void syncConfig_blankClientId_regenerates() {
         SyncConfig c = new SyncConfig(
             "", new RemoteConfig("h", 22, "u", "/k", "/r", null),
-            List.of(), true, 200, WatchConfig.defaults()
+            List.of(), 200, WatchConfig.defaults()
         );
         // Throws si no es UUID válido.
         UUID.fromString(c.clientId());
@@ -136,7 +134,6 @@ class SyncConfigStoreTest {
             UUID.randomUUID().toString(),
             new RemoteConfig(hostMarker, 22, "u", "/k", "/r", null),
             List.of(),
-            true,
             200,
             WatchConfig.defaults()
         );

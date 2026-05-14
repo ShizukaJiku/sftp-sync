@@ -47,19 +47,27 @@ public final class IgnoreMatcher {
         this.rules = List.copyOf(compiled);
     }
 
+    /** Nombre del archivo de patrones del proyecto. Estilo {@code .gitignore}. */
+    public static final String SYNCIGNORE_FILE = ".syncignore";
+
     /**
-     * Construye un matcher uniendo {@code config.ignore()} con el contenido de
-     * {@code .gitignore} en la raíz si {@code config.useGitignore() == true}.
-     * Si no hay {@code .gitignore} (o {@code useGitignore} es false), usa solo
-     * {@code config.ignore()}.
+     * Construye un matcher combinando {@code config.ignore()} con el contenido de
+     * {@code .syncignore} en la raíz si existe.
+     *
+     * <p>{@code .syncignore} es el archivo de patrones del proyecto, estilo
+     * {@code .gitignore}. Es propio de sftp-sync y deliberadamente independiente
+     * de {@code .gitignore}: lo que ignorás en git no necesariamente coincide con
+     * lo que querés excluir del sync (típico: artefactos buildables que SÍ querés
+     * sincronizar entre PCs, o secretos locales que NO querés subir).
+     *
+     * <p>Si no hay {@code .syncignore}, usa solo {@code config.ignore()} (los
+     * defaults built-in tipo {@code .git/}, {@code target/}, etc).
      */
     public static IgnoreMatcher fromConfig(Path projectRoot, SyncConfig config) throws IOException {
         List<String> all = new ArrayList<>(config.ignore());
-        if (config.useGitignore()) {
-            Path gi = projectRoot.resolve(".gitignore");
-            if (Files.isRegularFile(gi)) {
-                all.addAll(Files.readAllLines(gi, StandardCharsets.UTF_8));
-            }
+        Path syncignore = projectRoot.resolve(SYNCIGNORE_FILE);
+        if (Files.isRegularFile(syncignore)) {
+            all.addAll(Files.readAllLines(syncignore, StandardCharsets.UTF_8));
         }
         return new IgnoreMatcher(all);
     }

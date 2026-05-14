@@ -198,7 +198,6 @@ class PullCommandIntegrationTest {
             CLIENT_ID,
             new RemoteConfig("127.0.0.1", port, USER, null, remoteRoot, PASS),
             SyncConfig.defaultIgnorePatterns(),
-            true,
             200,
             WatchConfig.defaults()
         );

@@ -5,6 +5,7 @@ import io.github.shizuka.sftpsync.config.RemoteConfig;
 import io.github.shizuka.sftpsync.config.SyncConfig;
 import io.github.shizuka.sftpsync.config.SyncConfigStore;
 import io.github.shizuka.sftpsync.config.WatchConfig;
+import io.github.shizuka.sftpsync.util.IgnoreMatcher;
 import io.github.shizuka.sftpsync.util.PathExpansion;
 import io.github.shizuka.sftpsync.util.PathValidation;
 import picocli.CommandLine.Command;
@@ -13,6 +14,8 @@ import picocli.CommandLine.ParentCommand;
 
 import java.io.Console;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -149,7 +152,6 @@ public final class InitCommand implements Callable<Integer> {
             new RemoteConfig(resolvedHost, port, resolvedUser, resolvedKey,
                              resolvedRoot, resolvedPassword),
             SyncConfig.defaultIgnorePatterns(),
-            true,
             200,
             WatchConfig.defaults()
         );
@@ -161,9 +163,20 @@ public final class InitCommand implements Callable<Integer> {
             return 3;
         }
 
+        boolean syncignoreCreated;
+        try {
+            syncignoreCreated = bootstrapSyncignore(root);
+        } catch (IOException e) {
+            err("Error escribiendo .syncignore: " + e.getMessage());
+            return 3;
+        }
+
         out("");
         out("OK. Config escrita en " + SyncConfigStore.configPath(root));
         out("clientId: " + config.clientId());
+        if (syncignoreCreated) {
+            out(".syncignore starter creado en " + root.resolve(IgnoreMatcher.SYNCIGNORE_FILE));
+        }
         if (resolvedPassword != null) {
             out("");
             out("AVISO: el password quedó en plain text en config.json.");
@@ -288,6 +301,53 @@ public final class InitCommand implements Callable<Integer> {
             ? parent.substring(0, parent.length() - 1)
             : parent;
         return trimmedParent + "/" + folderName;
+    }
+
+    /**
+     * Escribe un {@code .syncignore} starter en {@code root} si no existe ya uno.
+     *
+     * <p>El archivo lleva comentarios explicando la sintaxis y un par de patterns
+     * de ejemplo. La idea es que el user lo descubra al hacer init y lo edite
+     * según su proyecto, en vez de tener que conocer su existencia de antemano.
+     *
+     * @return {@code true} si creamos el archivo, {@code false} si ya existía.
+     */
+    static boolean bootstrapSyncignore(Path root) throws IOException {
+        Path target = root.resolve(IgnoreMatcher.SYNCIGNORE_FILE);
+        if (Files.exists(target)) {
+            return false;
+        }
+        String content = """
+            # .syncignore — patrones de archivos/carpetas que NO se sincronizan via sftp-sync.
+            #
+            # Sintaxis estilo .gitignore:
+            #   - Comentarios con '#', líneas vacías se ignoran.
+            #   - 'foo/' ignora directorios llamados 'foo' a cualquier nivel.
+            #   - '/foo' ancla a la raíz del proyecto.
+            #   - 'foo/bar' ancla a la raíz por tener '/' en el medio.
+            #   - '*', '?', '**' funcionan como en gitignore.
+            #   - '!foo' DES-ignora algo que un pattern anterior ignoraba (last match wins).
+            #
+            # Los defaults built-in (.sync/, .git/, target/, build/, node_modules/,
+            # .idea/, .vscode/, *.class, *.log) ya están aplicados — no hace falta
+            # repetirlos acá.
+            #
+            # Este archivo es propio de sftp-sync y NO depende de .gitignore.
+
+            # Editores y temp files
+            *.swp
+            *.swo
+            *~
+
+            # macOS / Windows
+            .DS_Store
+            Thumbs.db
+
+            # Ejemplo: des-ignorar un jar que normalmente filtrarías
+            # !lib/important.jar
+            """;
+        Files.writeString(target, content, StandardCharsets.UTF_8);
+        return true;
     }
 
     private static void out(String s) { System.out.println(s); }

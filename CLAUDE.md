@@ -44,7 +44,7 @@ El plan completo está en `docs/design.md` sección 13. Estado:
 - ✅ **Paso 8**: `PushCommand` v1 + `RemoteTransfer` (staging content-addressed + posix-rename) + integración con lock + heartbeat
 - ✅ **Paso 9**: `PullCommand` v1 (download a tmp + verificar sha256 + ATOMIC_MOVE + conflictos como `.remote`)
 - ✅ **Paso 10**: `LockHeartbeat` (scheduled refresh cada ttl/3) + `RemoteLockManager.acquireOrSteal` (CAS sobre lock huérfano vía `lock.new + posix-rename`, Apéndice D)
-- ✅ **Paso 11**: `IgnoreMatcher` real con parser de `.gitignore` (comentarios, negaciones, anclaje, `**`, `?`, escapes). Lectura automática de `.gitignore` si `useGitignore=true`.
+- ✅ **Paso 11**: `IgnoreMatcher` con parser estilo gitignore (comentarios, negaciones, anclaje, `**`, `?`, escapes). Lee `.syncignore` del proyecto si existe — archivo propio de sftp-sync, deliberadamente independiente de `.gitignore`. `init` lo bootstrappea si no existe.
 - ✅ **Paso 12**: `ResolveCommand` con `--keep-local | --keep-remote | --keep-both`. Ancla `base.json` correctamente al hash remoto para que el siguiente diff vea el resultado esperado (toUpload o unchanged según la estrategia).
 - ✅ **Paso 13**: `WatchCommand` + `WatchState` + `StateStore`. Dos loops (scan local + poll remoto) sobre virtual threads. `--once` para un ciclo único. `status` lee `state.json` si está fresco (< 2× pollInterval).
 - ✅ **Paso 14**: hardening. `--gc` en push limpia `staging/` huérfanos. Re-hash pre-upload (mitigación 3.6). `PathValidation` rechaza nombres Windows-inválidos (reserved CON/PRN/..., trailing space/dot, chars prohibidos, MAX_PATH=260).
@@ -70,7 +70,7 @@ src/main/java/io/github/shizuka/sftpsync/
 │                                (acquire/release/steal CAS + scheduled refresh),
 │                                RemoteTransfer (upload to staging, promote, download, delete, gcStaging)
 ├── watcher/                     WatchState (snapshot del estado), StateStore (.sync/state.json)
-└── util/                        Hashing (SHA-256 streaming), IgnoreMatcher (parser .gitignore),
+└── util/                        Hashing (SHA-256 streaming), IgnoreMatcher (parser .syncignore),
                                   PathExpansion, PathValidation (compatibilidad Windows), Hostname
 
 src/main/resources/META-INF/native-image/io.github.shizuka/sftp-sync/

@@ -194,6 +194,44 @@ class InitCommandTest {
     }
 
     @Test
+    @DisplayName("init creates a starter .syncignore in the project root")
+    void init_writesSyncignoreStarter(@TempDir Path tmp) throws IOException {
+        int exit = newCli().execute(
+            "-C", tmp.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u",
+            "--key", "/k", "--remote-root", "/r"
+        );
+
+        assertThat(exit).isZero();
+        Path syncignore = tmp.resolve(".syncignore");
+        assertThat(syncignore).isRegularFile();
+        String content = Files.readString(syncignore);
+        assertThat(content)
+            .contains("# .syncignore")
+            .contains(".DS_Store")
+            .contains("Thumbs.db");
+    }
+
+    @Test
+    @DisplayName("init preserves an existing .syncignore — does not overwrite")
+    void init_existingSyncignore_preserved(@TempDir Path tmp) throws IOException {
+        Path syncignore = tmp.resolve(".syncignore");
+        Files.writeString(syncignore, "# my custom rules\n*.bak\n");
+
+        int exit = newCli().execute(
+            "-C", tmp.toString(),
+            "init", "--non-interactive",
+            "--host", "h", "--user", "u",
+            "--key", "/k", "--remote-root", "/r"
+        );
+
+        assertThat(exit).isZero();
+        assertThat(Files.readString(syncignore))
+            .isEqualTo("# my custom rules\n*.bak\n");
+    }
+
+    @Test
     @DisplayName("init with --remote-parent / produces single-slash remoteRoot, not //")
     void init_remoteParentRoot_avoidsDoubleSlash(@TempDir Path tmp) throws IOException {
         // Codex review P2: --remote-parent "/" debe dar "/folderName" no "//folderName".
