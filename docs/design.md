@@ -575,7 +575,7 @@ Cada paso cierra con un test manual end-to-end contra el container y un par de t
 
   <groupId>com.example</groupId>
   <artifactId>sftp-sync</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <packaging>jar</packaging>
 
   <properties>
