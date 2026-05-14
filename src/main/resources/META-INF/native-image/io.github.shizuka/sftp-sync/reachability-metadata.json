@@ -1,0 +1,154 @@
+{
+  "reflection": [
+    {
+      "type": "io.github.shizuka.sftpsync.config.SyncConfig",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.config.RemoteConfig",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.config.WatchConfig",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.manifest.Manifest",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.manifest.ManifestEntry",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.manifest.ScanCacheFile",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.manifest.ScanCacheEntry",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.sftp.LockInfo",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.watcher.WatchState",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "io.github.shizuka.sftpsync.watcher.WatchState$Summary",
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "java.util.ArrayList",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "java.util.LinkedHashMap",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "java.util.HashMap",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "java.security.KeyFactory",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.security.Provider"] }
+      ]
+    },
+    {
+      "type": "java.security.MessageDigest",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+    {
+      "type": "javax.crypto.KeyAgreement",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+    {
+      "type": "javax.crypto.Cipher",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+    {
+      "type": "javax.crypto.Mac",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+    {
+      "type": "java.security.Signature",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+    {
+      "type": "java.security.KeyPairGenerator",
+      "methods": [
+        { "name": "getInstance", "parameterTypes": ["java.lang.String"] },
+        { "name": "getInstance", "parameterTypes": ["java.lang.String", "java.lang.String"] }
+      ]
+    },
+
+    {
+      "type": { "proxy": ["org.apache.sshd.common.session.SessionListener"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.channel.ChannelListener"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.io.IoSessionEventListener"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.session.ReservedSessionMessagesHandler"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.forward.PortForwardingEventListener"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.session.UnknownChannelReferenceHandler"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.common.kex.KexExtensionHandler"] }
+    },
+    {
+      "type": { "proxy": ["org.apache.sshd.sftp.client.SftpClient"] }
+    }
+  ],
+  "resources": [
+    { "glob": "META-INF/services/*" }
+  ]
+}
