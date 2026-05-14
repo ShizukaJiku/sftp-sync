@@ -26,7 +26,7 @@ public final class Hashing {
      * @return hex lowercase, longitud 64 chars.
      */
     public static String sha256(Path file) throws IOException {
-        MessageDigest md = newSha256();
+        MessageDigest md = newSha256Digest();
         try (InputStream in = Files.newInputStream(file)) {
             byte[] buf = new byte[BUFFER_SIZE];
             int n;
@@ -34,17 +34,25 @@ public final class Hashing {
                 md.update(buf, 0, n);
             }
         }
-        return toHex(md.digest());
+        return hex(md.digest());
     }
 
     /** SHA-256 hex de un byte array (útil para tests y para datos chicos en memoria). */
     public static String sha256(byte[] data) {
-        MessageDigest md = newSha256();
+        MessageDigest md = newSha256Digest();
         md.update(data);
-        return toHex(md.digest());
+        return hex(md.digest());
     }
 
-    private static MessageDigest newSha256() {
+    /**
+     * Devuelve un {@link MessageDigest} SHA-256 fresco. Útil para flujos que
+     * necesitan calcular el hash en streaming (ej. {@code DigestInputStream}
+     * sobre una descarga SFTP) sin pasar por {@link #sha256(Path)}.
+     *
+     * <p>SHA-256 está garantizado por la JVM spec; si la implementación no está
+     * disponible se lanza {@link AssertionError}.
+     */
+    public static MessageDigest newSha256Digest() {
         try {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -54,7 +62,8 @@ public final class Hashing {
         }
     }
 
-    private static String toHex(byte[] bytes) {
+    /** Codifica un array de bytes a hex lowercase. */
+    public static String hex(byte[] bytes) {
         char[] out = new char[bytes.length * 2];
         for (int i = 0; i < bytes.length; i++) {
             int v = bytes[i] & 0xff;

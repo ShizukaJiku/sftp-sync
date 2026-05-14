@@ -82,7 +82,64 @@ public final class Main implements Runnable {
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
+        Thread.setDefaultUncaughtExceptionHandler(Main::handleUncaught);
+
         int exitCode = new CommandLine(new Main()).execute(args);
         System.exit(exitCode);
+    }
+
+    /**
+     * Handler global que silencia ruido cosmético de MINA SSHD en Windows tras
+     * cerrar la sesión, y delega cualquier otra excepción al comportamiento
+     * default de la JVM.
+     *
+     * <p><b>Por qué existe:</b> en Windows, después de {@code SshClient.stop()},
+     * el IOCP del kernel todavía puede tener una read pendiente sobre el socket
+     * SSH. Cuando esa read falla (porque cerramos el socket), un thread del pool
+     * de IOCP intenta despachar el callback a través de {@code NoCloseExecutor}
+     * de MINA, que ya está apagado. Resultado: {@code IllegalStateException:
+     * Executor has been shut down} en un thread de fondo, después de que el
+     * comando ya terminó OK. La excepción es post-mortem y no afecta corrección,
+     * solo ensucia stderr.
+     *
+     * <p>Condiciones para silenciar (todas deben cumplirse):
+     * <ol>
+     *   <li>Es {@code IllegalStateException}.</li>
+     *   <li>El mensaje contiene {@code "Executor has been shut down"}.</li>
+     *   <li>Algún frame del stack tiene clase que empieza con {@code org.apache.sshd.}</li>
+     * </ol>
+     *
+     * <p>Si no cumple, replicamos el comportamiento default (imprimir el stack
+     * a stderr con el prefix estándar). El handler tiene try/catch propio: si
+     * fallara, no queremos enmascarar el problema.
+     *
+     * <p><b>Nota:</b> este handler es process-global. Si algún día este código se
+     * usara como librería embedida, sobrescribiría el handler del host.
+     */
+    private static void handleUncaught(Thread thread, Throwable t) {
+        try {
+            if (isMinaShutdownNoise(t)) return;
+            System.err.print("Exception in thread \"" + thread.getName() + "\" ");
+            t.printStackTrace(System.err);
+        } catch (Throwable inner) {
+            // Si el handler propio falla, al menos no perder el original.
+            try {
+                System.err.println("Uncaught exception handler failed: " + inner);
+                t.printStackTrace(System.err);
+            } catch (Throwable _) {
+                // Nada que hacer.
+            }
+        }
+    }
+
+    /** Visibilidad package-private para tests. */
+    static boolean isMinaShutdownNoise(Throwable t) {
+        if (!(t instanceof IllegalStateException)) return false;
+        String msg = t.getMessage();
+        if (msg == null || !msg.contains("Executor has been shut down")) return false;
+        for (StackTraceElement el : t.getStackTrace()) {
+            if (el.getClassName().startsWith("org.apache.sshd.")) return true;
+        }
+        return false;
     }
 }

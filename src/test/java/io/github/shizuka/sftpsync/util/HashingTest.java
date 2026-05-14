@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,5 +71,30 @@ class HashingTest {
     void sha256_anyInput_returnsLowercaseHexOfLength64() {
         String h = Hashing.sha256("hello world".getBytes(StandardCharsets.UTF_8));
         assertThat(h).hasSize(64).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    @DisplayName("newSha256Digest produces fresh independent instances")
+    void newSha256Digest_calledTwice_returnsIndependentDigests() {
+        MessageDigest a = Hashing.newSha256Digest();
+        MessageDigest b = Hashing.newSha256Digest();
+        a.update("abc".getBytes(StandardCharsets.UTF_8));
+        // b debe seguir siendo el digest del input vacío, sin contaminarse con a.
+        assertThat(Hashing.hex(b.digest())).isEqualTo(EMPTY_SHA256);
+        assertThat(Hashing.hex(a.digest())).isEqualTo(ABC_SHA256);
+    }
+
+    @Test
+    @DisplayName("hex round-trips known SHA-256 vector via streaming digest")
+    void hex_streamingDigest_matchesKnownVector() {
+        MessageDigest md = Hashing.newSha256Digest();
+        md.update("abc".getBytes(StandardCharsets.UTF_8));
+        assertThat(Hashing.hex(md.digest())).isEqualTo(ABC_SHA256);
+    }
+
+    @Test
+    @DisplayName("hex returns empty string for empty input")
+    void hex_emptyArray_returnsEmptyString() {
+        assertThat(Hashing.hex(new byte[0])).isEmpty();
     }
 }
