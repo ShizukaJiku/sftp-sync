@@ -6,7 +6,7 @@
 
   <groupId>io.github.shizuka</groupId>
   <artifactId>sftp-sync</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <packaging>jar</packaging>
 
   <name>sftp-sync</name>
@@ -178,6 +178,10 @@
               <buildArgs>
                 <buildArg>--no-fallback</buildArg>
                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                <!-- Foreign Function API (kernel32.dll lookup desde
+                     ConsoleEncoding para forzar UTF-8 en consola Windows).
+                     Sin este flag el binario warnea al user en cada ejecucion. -->
+                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                 <!-- Solo locales en/es para mensajes del CLI. Ahorra ~1-2 MB. -->
                 <buildArg>-H:IncludeLocales=en,es</buildArg>
                 <!-- Optimización maxima de runtime. -O3 + AVX2 + BMI1/2 (x86-64-v3)

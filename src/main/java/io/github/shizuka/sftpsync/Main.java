@@ -10,6 +10,7 @@ import io.github.shizuka.sftpsync.cli.ResolveCommand;
 import io.github.shizuka.sftpsync.cli.ScanCommand;
 import io.github.shizuka.sftpsync.cli.StatusCommand;
 import io.github.shizuka.sftpsync.cli.WatchCommand;
+import io.github.shizuka.sftpsync.util.ConsoleEncoding;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -34,7 +35,7 @@ import java.nio.charset.StandardCharsets;
 @Command(
     name = "sftp-sync",
     mixinStandardHelpOptions = true,
-    version = "sftp-sync 1.0.0",
+    version = "sftp-sync 1.0.1",
     description = "Sincronizador de carpetas multi-PC sobre SFTP, estilo Git.",
     subcommands = {
         InitCommand.class,
@@ -76,9 +77,17 @@ public final class Main implements Runnable {
     }
 
     public static void main(String[] args) {
-        // Forzar UTF-8 en stdout/stderr para que las tildes y eñes salgan bien
-        // en Windows PowerShell por default (que usa CP1252) y otras terminales
-        // que no tienen UTF-8 como charset nativo. Independiente del locale del SO.
+        // En Windows, decirle a la consola que renderice como UTF-8 (CP 65001)
+        // ANTES de imprimir nada. Sin esto, los bytes UTF-8 que escribimos en
+        // setOut/setErr se renderizan según el code page nativo de la terminal
+        // (CP437/CP1252 según locale) → mojibake en tildes y eñes. No-op en
+        // Linux y macOS (sus terminales ya son UTF-8).
+        ConsoleEncoding.enableUtf8OnWindows();
+
+        // Forzar UTF-8 en stdout/stderr para que los bytes que escribimos
+        // representen correctamente los caracteres no-ASCII. Independiente del
+        // locale del SO. Combinado con enableUtf8OnWindows, garantiza render
+        // correcto en cualquier terminal Windows/Linux/macOS.
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
 
