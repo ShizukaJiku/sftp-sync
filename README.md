@@ -52,20 +52,60 @@ mvn -Pnative package
 Requiere GraalVM JDK 25 instalado (recomendado vía
 [SDKMAN](https://sdkman.io/): `sdk install java 25-graalce`).
 
-## Binarios precompilados
+## Instalación
 
-Cada push a `main` (y cada tag `vX.Y.Z`) dispara el CI, que produce binarios
-nativos para los tres OS. Para descargarlos:
+Binarios nativos para Linux y Windows. Comprimidos con UPX (~7 MB cada uno).
 
-1. Andá a la pestaña **Actions** del repo.
-2. Abrí el último run del workflow `CI`.
-3. Bajá la sección **Artifacts** y descargá:
-   - `sftp-sync-linux-x64`
-   - `sftp-sync-windows-x64`
-   - `sftp-sync-macos-arm64`
+### Desde GitHub Releases (recomendado)
 
-En tags `vX.Y.Z` además se publica un GitHub Release con los tres binarios
-adjuntos.
+Última versión: [releases page](https://github.com/ShizukaJiku/sftp-sync/releases/latest).
+
+**Linux** (terminal):
+
+```bash
+curl -L -o /usr/local/bin/sftp-sync \
+  https://github.com/ShizukaJiku/sftp-sync/releases/latest/download/sftp-sync-linux-x64.bin
+chmod +x /usr/local/bin/sftp-sync
+```
+
+**Windows** (PowerShell, admin):
+
+```powershell
+$dest = "$env:LOCALAPPDATA\Programs\sftp-sync"
+New-Item -ItemType Directory -Force -Path $dest | Out-Null
+Invoke-WebRequest `
+  -Uri "https://github.com/ShizukaJiku/sftp-sync/releases/latest/download/sftp-sync-windows-x64.exe" `
+  -OutFile "$dest\sftp-sync.exe"
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;$dest", "User")
+```
+
+Reabrí la terminal y `sftp-sync --help` debería funcionar.
+
+### Con `gh` CLI
+
+Si ya tenés [`gh`](https://cli.github.com/) instalado:
+
+```bash
+gh release download --repo ShizukaJiku/sftp-sync \
+  -p 'sftp-sync-linux-x64.bin'   # o 'sftp-sync-windows-x64.exe'
+```
+
+### Artefactos de cada push a `main`/`development`
+
+Si querés un build de una rama específica (no una release tageada), bajá desde
+**Actions → último run → Artifacts**:
+
+- `sftp-sync-linux-x64`
+- `sftp-sync-windows-x64`
+
+### Scoop (Windows, planeado)
+
+Próximamente: `scoop install sftp-sync` vía bucket dedicado. Mientras tanto,
+usá los métodos de arriba.
+
+### Construcción desde source
+
+Para producir el binario localmente, ver la sección **Build** más abajo.
 
 ## Servidor SFTP
 

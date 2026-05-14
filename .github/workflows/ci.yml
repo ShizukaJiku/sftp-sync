@@ -76,6 +76,13 @@ jobs:
           native-image-job-reports: 'true'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # native-image en Windows necesita el x64 Developer Command Prompt
+      # (cl.exe + link.exe). Sin esto, el build falla con
+      # "Failed to find 'vcvarsall.bat' in a Visual Studio installation".
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build native image
         run: mvn -B -ntp -Pnative package
 
