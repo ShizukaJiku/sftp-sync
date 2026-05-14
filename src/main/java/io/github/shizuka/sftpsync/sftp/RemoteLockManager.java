@@ -114,7 +114,7 @@ public final class RemoteLockManager {
     }
 
     private static LockInfo tryRead(SftpClient sftp, String remoteRoot) {
-        try { return read(sftp, remoteRoot); } catch (IOException ignored) { return null; }
+        try { return read(sftp, remoteRoot); } catch (IOException _) { return null; }
     }
 
     static void writeOverwrite(SftpClient sftp, String remoteRoot, LockInfo newLock)
@@ -133,7 +133,7 @@ public final class RemoteLockManager {
         } catch (IOException e) {
             try {
                 if (RemoteManifestStore.statExists(sftp, tmp)) sftp.remove(tmp);
-            } catch (IOException ignore) {}
+            } catch (IOException _) {}
             throw e;
         }
     }
@@ -163,7 +163,7 @@ public final class RemoteLockManager {
 
         try {
             if (RemoteManifestStore.statExists(sftp, tmp)) sftp.remove(tmp);
-        } catch (IOException ignore) {}
+        } catch (IOException _) {}
 
         try (SftpClient.CloseableHandle h = sftp.open(tmp,
                 EnumSet.of(OpenMode.Create, OpenMode.Exclusive, OpenMode.Write))) {
@@ -173,7 +173,7 @@ public final class RemoteLockManager {
         try {
             PosixRename.overwrite(sftp, tmp, target);
         } catch (IOException e) {
-            try { sftp.remove(tmp); } catch (IOException ignore) {}
+            try { sftp.remove(tmp); } catch (IOException _) {}
             throw e;
         }
 

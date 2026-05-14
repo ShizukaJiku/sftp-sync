@@ -251,7 +251,7 @@ public final class PushCommand implements Callable<Integer> {
     private static void tryRelease(SftpSession session, String remoteRoot, PrintWriter err) {
         try {
             RemoteLockManager.release(session.sftp(), remoteRoot);
-        } catch (IOException ignore) {
+        } catch (IOException _) {
             err.println("Warning: no pude liberar el lock tras un error.");
         }
     }

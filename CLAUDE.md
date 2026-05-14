@@ -21,7 +21,7 @@ Probado contra `emberstack/sftp` v5.1.71 en Docker.
 
 | Componente | Versión | Por qué |
 |-----------|---------|---------|
-| **GraalVM JDK 21** community | LTS hasta 2031 | Mejor compatibilidad con sshj/BC en native-image que JDK 25 |
+| **GraalVM JDK 25** community | LTS hasta 2033 | Funciona con MINA SSHD + BC (sshj era el problema, no JDK 25). +5% en runtime y -1 MB de binario vs 21 |
 | **Maven 3.9** | — | El user prefiere XML explícito sobre Gradle |
 | **Apache MINA SSHD** | 2.16.0 | Reemplazó a sshj 0.40 (issue #871: incompatible con BC en native-image) |
 | **picocli** | 4.7.7 | + picocli-codegen para reflection en native |

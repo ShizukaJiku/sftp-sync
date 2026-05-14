@@ -99,7 +99,7 @@ public final class RemoteManifestStore {
         } catch (IOException e) {
             try {
                 if (statExists(sftp, tmp)) sftp.remove(tmp);
-            } catch (IOException ignore) {}
+            } catch (IOException _) {}
             throw e;
         }
     }

@@ -53,7 +53,7 @@ public final class StateStore {
             Instant last = Instant.parse(s.lastRemoteCheckAt());
             Duration age = Duration.between(last, Instant.now());
             if (age.getSeconds() <= 2L * pollIntervalSeconds) return s;
-        } catch (DateTimeParseException ignored) { /* trat como stale */ }
+        } catch (DateTimeParseException _) { /* trat como stale */ }
         return null;
     }
 

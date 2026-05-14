@@ -97,7 +97,7 @@ public final class PingCommand implements Callable<Integer> {
             }
 
             int entryCount = 0;
-            for (var ignored : session.sftp().readDir(remoteRoot)) entryCount++;
+            for (var _ : session.sftp().readDir(remoteRoot)) entryCount++;
             out.println("Carpeta remota OK: " + remoteRoot + " (" + entryCount + " entries)");
             return 0;
         } catch (IOException e) {

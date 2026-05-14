@@ -144,6 +144,6 @@ public final class SftpSession implements AutoCloseable {
 
     private static void closeQuietly(AutoCloseable c) {
         if (c == null) return;
-        try { c.close(); } catch (Exception ignore) {}
+        try { c.close(); } catch (Exception _) {}
     }
 }
