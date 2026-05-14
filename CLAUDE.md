@@ -21,7 +21,7 @@ Probado contra `emberstack/sftp` v5.1.71 en Docker.
 
 | Componente | Versión | Por qué |
 |-----------|---------|---------|
-| **GraalVM JDK 25** community | LTS hasta 2033 | AOT cache, Structured Concurrency stable |
+| **GraalVM JDK 21** community | LTS hasta 2031 | Mejor compatibilidad con sshj/BC en native-image que JDK 25 |
 | **Maven 3.9** | — | El user prefiere XML explícito sobre Gradle |
 | **sshj** | 0.40.0 | posix-rename support, mantenido |
 | **picocli** | 4.7.7 | + picocli-codegen para reflection en native |
@@ -115,21 +115,47 @@ está en `ManifestBuilder.toRelative` (`replace('\\', '/')`).
 
 ### 1. BouncyCastle deliberadamente DESACTIVADO
 
-Issue [hierynomus/sshj#782](https://github.com/hierynomus/sshj/issues/782): BC
-en native-image requiere `-H:AdditionalSecurityProviders=BC` + verificación en
-build time, y en GraalVM JDK 25 + BC 1.80 la verificación falla en runtime
-con `SecurityException: Attempted to verify a provider that was not registered
-at build time: BC version 1.8`, sin importar qué flag uses.
+Issue [hierynomus/sshj#871](https://github.com/hierynomus/sshj/issues/871): sshj
+0.40 internamente crea una nueva instancia de `BouncyCastleProvider` con
+`Class.forName().newInstance()` en `SecurityUtils.registerSecurityProvider`,
+y JCE en native-image rechaza esa instancia recién creada porque NO fue verificada
+en build time. El error es:
 
-**Decisión**: `SftpSession` static block hace `setRegisterBouncyCastle(false)`.
+```
+UnsupportedFeatureError: Trying to verify a provider that was not registered
+at build time: BC version 1.8. All providers must be registered and verified
+in the Native Image builder.
+```
+
+Probado exhaustivamente en GraalVM CE 21.0.2 y 25.0.0 con todos los flags
+posibles (`--initialize-at-build-time=org.bouncycastle`,
+`-H:AdditionalSecurityProviders`, `--enable-all-security-services`,
+`BouncyCastleInitializer` con verificación en `<clinit>`). El problema no
+es de JDK, es que sshj insiste en re-crear su propio provider.
+
+**Decisión**: `SftpSession.<clinit>` hace `setRegisterBouncyCastle(false)`.
 sshj usa providers JDK (SunJCE + SunEC), que dan AES-256-CTR/GCM, ssh-rsa,
 ssh-ed25519 y ECDH — más que suficiente para emberstack/OpenSSH. Trade-off:
 sin BC, no hay chacha20-poly1305 ni curve25519. sshj loguea ~17 warnings al
-arrancar ("Cipher [X] disabled") que son ruido visual pero el handshake
-completa sin problema. Verificado E2E con emberstack v5.1.71.
+arrancar ("Cipher [X] disabled") que son cosméticos. Verificado E2E con
+emberstack v5.1.71.
 
-**Si en el futuro necesitás BC**: requeriría wrapper de provider custom o
-esperar a un fix upstream en sshj. El binario es ~25 MB sin BC vs ~43 MB con BC.
+**Cuando sshj#871 mergee**: se puede volver a habilitar BC. El binario pasa
+de ~27 MB sin BC a ~43 MB con BC, así que el trade-off de size también pesa.
+
+### Optimizaciones de binario nativo
+
+El binario producido por el perfil `native` aplica:
+
+- `-march=compatibility`: target x86-64 baseline (no native CPU). Permite que
+  el binario corra en cualquier máquina x86-64, no solo en la que compiló.
+- `-H:IncludeLocales=en,es`: solo incluye los locales necesarios. Ahorra ~1-2 MB.
+- `--no-fallback`: build falla si necesita modo fallback en lugar de hacerlo
+  silenciosamente.
+
+Post-build, el CI aplica **UPX con `--best --lzma`** que comprime el binario
+~75% (27 MB → ~7 MB en Linux, similar en Windows). El startup overhead de la
+descompresión es ~50 ms, imperceptible para un CLI.
 
 ### 2. Passphrase en claves SSH NO soportada
 

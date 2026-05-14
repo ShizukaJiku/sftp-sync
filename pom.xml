@@ -13,7 +13,7 @@
   <description>Sincronizador de carpetas multi-PC sobre SFTP, estilo Git</description>
 
   <properties>
-    <maven.compiler.release>25</maven.compiler.release>
+    <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <picocli.version>4.7.7</picocli.version>
@@ -38,7 +38,6 @@
       <artifactId>sshj</artifactId>
       <version>${sshj.version}</version>
     </dependency>
-
 
     <!-- CLI parsing -->
     <dependency>
@@ -144,6 +143,13 @@
               <buildArgs>
                 <buildArg>--no-fallback</buildArg>
                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                <!-- Restringir locales incluidos. Solo necesitamos en y es para los
+                     mensajes del CLI. Ahorra ~1-2 MB en el binario. -->
+                <buildArg>-H:IncludeLocales=en,es</buildArg>
+                <!-- Compatibilidad de arquitectura: binario que corre en cualquier
+                     CPU x86-64, no solo en la que compilamos. Esencial para
+                     distribucion (CI -> usuario final con CPU distinta). -->
+                <buildArg>-march=compatibility</buildArg>
               </buildArgs>
             </configuration>
           </plugin>
