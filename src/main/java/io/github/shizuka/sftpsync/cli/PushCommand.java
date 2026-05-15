@@ -136,7 +136,12 @@ public final class PushCommand implements Callable<Integer> {
                 return 7;
             }
             if (cs.toUpload().isEmpty() && cs.toDeleteRemote().isEmpty()) {
-                out.println("Nada que pushear.");
+                // Aún sin cambios, anclar base.json al manifest remoto actual.
+                // Sin esto, una modificación local posterior se marcaría como
+                // conflict en lugar de toUpload (porque sin base, three-way diff
+                // no puede distinguir "yo lo modifiqué" vs "remoto lo modificó").
+                BaseStore.save(root, remoteManifest);
+                out.println("Nada que pushear. base.json anclado al manifest remoto actual.");
                 return 0;
             }
 

@@ -160,7 +160,12 @@ public final class PullCommand implements Callable<Integer> {
 
             if (cs.toDownload().isEmpty() && cs.toDeleteLocal().isEmpty()
                 && cs.conflicts().isEmpty()) {
-                out.println("Nada que pullear.");
+                // Aún sin cambios, anclar base.json al manifest remoto actual.
+                // Sin esto, una modificación local posterior se marcaría como
+                // conflict en lugar de toUpload (porque sin base, three-way diff
+                // no puede distinguir "yo lo modifiqué" vs "remoto lo modificó").
+                BaseStore.save(root, remoteManifest);
+                out.println("Nada que pullear. base.json anclado al manifest remoto actual.");
                 return 0;
             }
 

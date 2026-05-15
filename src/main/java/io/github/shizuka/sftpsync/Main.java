@@ -6,6 +6,7 @@ import io.github.shizuka.sftpsync.cli.PingCommand;
 import io.github.shizuka.sftpsync.cli.PullCommand;
 import io.github.shizuka.sftpsync.cli.PushCommand;
 import io.github.shizuka.sftpsync.cli.RemoteManifestCommand;
+import io.github.shizuka.sftpsync.cli.RepairCommand;
 import io.github.shizuka.sftpsync.cli.ResolveCommand;
 import io.github.shizuka.sftpsync.cli.ScanCommand;
 import io.github.shizuka.sftpsync.cli.StatusCommand;
@@ -35,7 +36,7 @@ import java.nio.charset.StandardCharsets;
 @Command(
     name = "sftp-sync",
     mixinStandardHelpOptions = true,
-    version = "sftp-sync 1.0.3",
+    version = "sftp-sync 1.0.4",
     description = "Sincronizador de carpetas multi-PC sobre SFTP, estilo Git.",
     subcommands = {
         InitCommand.class,
@@ -44,6 +45,7 @@ import java.nio.charset.StandardCharsets;
         PullCommand.class,
         WatchCommand.class,
         ResolveCommand.class,
+        RepairCommand.class,
         ScanCommand.class,
         PingCommand.class,
         RemoteManifestCommand.class,
