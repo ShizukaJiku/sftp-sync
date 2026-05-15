@@ -36,7 +36,7 @@ import java.nio.charset.StandardCharsets;
 @Command(
     name = "sftp-sync",
     mixinStandardHelpOptions = true,
-    version = "sftp-sync 1.0.4",
+    version = "sftp-sync 1.0.5",
     description = "Sincronizador de carpetas multi-PC sobre SFTP, estilo Git.",
     subcommands = {
         InitCommand.class,

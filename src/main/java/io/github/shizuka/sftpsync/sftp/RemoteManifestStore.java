@@ -117,7 +117,11 @@ public final class RemoteManifestStore {
         return b + "/" + s;
     }
 
-    static boolean statExists(SftpClient sftp, String path) throws IOException {
+    /**
+     * {@code true} si el path remoto existe (cualquier tipo: archivo, dir, link).
+     * Distingue "no existe" (status 2) de otros errores (que se propagan).
+     */
+    public static boolean statExists(SftpClient sftp, String path) throws IOException {
         try {
             sftp.stat(path);
             return true;
