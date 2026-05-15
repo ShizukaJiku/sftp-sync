@@ -30,8 +30,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -178,7 +179,15 @@ public final class PushCommand implements Callable<Integer> {
                 }
 
                 // --- Upload + promote ---
-                Map<String, String> promotions = new LinkedHashMap<>(); // staged → finalRemote
+                // Importante: el staging dir es content-addressed por SHA-256.
+                // Si dos archivos del changeset tienen contenido idéntico (mismo SHA),
+                // ambos suben al MISMO staging path. Usamos una lista (no un Map por
+                // staged path) para preservar todos los destinos. En la promoción,
+                // si el staging fue consumido por un rename previo (otro file con
+                // el mismo SHA ganó la carrera), re-uploadeamos desde local antes
+                // de renombrar al destino actual. Eso garantiza que TODOS los
+                // finalRemotes reciban el contenido, no solo el último en orden.
+                List<Promotion> promotions = new ArrayList<>();
                 for (String relPath : csFinal.toUpload()) {
                     ManifestEntry entry = localManifest.entries().get(relPath);
                     Path localFile = root.resolve(relPath);
@@ -196,11 +205,21 @@ public final class PushCommand implements Callable<Integer> {
                     String staged = RemoteTransfer.uploadToStaging(
                         session.sftp(), remoteRoot, localFile, entry.sha256());
                     String finalRemote = RemoteManifestStore.joinRemote(remoteRoot, relPath);
-                    promotions.put(staged, finalRemote);
+                    promotions.add(new Promotion(staged, finalRemote, localFile, entry.sha256()));
                     out.println("upload  " + relPath);
                 }
-                for (Map.Entry<String, String> e : promotions.entrySet()) {
-                    RemoteTransfer.promoteFromStaging(session.sftp(), e.getKey(), e.getValue());
+                for (Promotion p : promotions) {
+                    // Si el staging fue consumido por un rename anterior con el
+                    // mismo SHA, lo re-uploadeamos desde local antes de promover.
+                    // Sin esto, archivos con contenido duplicado se reportan como
+                    // "upload" pero solo uno termina en su destino — la causa raíz
+                    // del drift sistémico que detectamos en producción.
+                    if (!RemoteManifestStore.statExists(session.sftp(), p.staged())) {
+                        RemoteTransfer.uploadToStaging(
+                            session.sftp(), remoteRoot, p.localFile(), p.sha256());
+                    }
+                    RemoteTransfer.promoteFromStaging(
+                        session.sftp(), p.staged(), p.finalRemote());
                 }
 
                 // --- Deletes remotos ---
@@ -260,4 +279,13 @@ public final class PushCommand implements Callable<Integer> {
             err.println("Warning: no pude liberar el lock tras un error.");
         }
     }
+
+    /**
+     * Una promoción pendiente: el archivo está en {@code staged} (content-addressed
+     * por SHA) y se va a renombrar a {@code finalRemote}. Si dos files distintos
+     * con el mismo SHA están en el changeset, comparten {@code staged}; mantenemos
+     * el {@code localFile} y {@code sha256} para poder re-uploadear desde local
+     * si el staging fue consumido por una promoción anterior.
+     */
+    private record Promotion(String staged, String finalRemote, Path localFile, String sha256) {}
 }
